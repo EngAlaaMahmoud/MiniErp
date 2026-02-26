@@ -1,0 +1,299 @@
+@page "/returns"
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@inject ApiSession Session
+@inject ApiClient Api
+@inject NavigationManager Nav
+
+<PageTitle>مرتجع</PageTitle>
+
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="h3 m-0">مرتجع</h1>
+        <a class="btn btn-outline-secondary" href="/">لوحة التحكم</a>
+    </div>
+
+    @if (!Session.IsLoggedIn)
+    {
+        <div class="alert alert-warning">مطلوب تسجيل الدخول.</div>
+        <a class="btn btn-primary" href="/login">تسجيل الدخول</a>
+    }
+    else
+    {
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <div class="alert alert-danger">@_error</div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(_success))
+        {
+            <div class="alert alert-success">@_success</div>
+        }
+
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="fw-bold mb-2">بحث عن الفاتورة</div>
+                <div class="d-flex gap-2">
+                    <input class="form-control" placeholder="SaleNo مثال: S-20260225-000001" @bind="_saleNo" @bind:event="oninput" />
+                    <button class="btn btn-outline-primary" @onclick="LoadSale" disabled="@_busy">تحميل</button>
+                </div>
+            </div>
+        </div>
+
+        @if (_sale is not null)
+        {
+            <div class="row g-3">
+                <div class="col-lg-8">
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="fw-bold mb-2">الفاتورة: <code>@_sale.SaleNo</code></div>
+                            <div class="text-muted mb-3">الإجمالي: @_sale.Total</div>
+
+                            <div class="table-responsive">
+                                <table class="table table-sm table-striped align-middle">
+                                    <thead>
+                                        <tr>
+                                            <th>المنتج</th>
+                                            <th class="text-end">Sold</th>
+                                            <th class="text-end">Return</th>
+                                            <th class="text-end">السعر</th>
+                                            <th class="text-end">خصم</th>
+                                            <th class="text-end">الإجمالي</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var line in _returnLines)
+                                        {
+                                            <tr>
+                                                <td>@line.ProductName</td>
+                                                <td class="text-end">@line.SoldQty</td>
+                                                <td class="text-end" style="width:140px">
+                                                    <InputNumber class="form-control form-control-sm text-end" @bind-Value="line.ReturnQty" @bind-Value:event="oninput" />
+                                                </td>
+                                                <td class="text-end">@line.UnitPrice</td>
+                                                <td class="text-end">@line.Discount</td>
+                                                <td class="text-end">@line.LineTotal</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                    <tfoot>
+                                        <tr>
+                                            <th colspan="5" class="text-end">إجمالي المرتجع</th>
+                                            <th class="text-end">@ReturnTotal</th>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-4">
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="fw-bold mb-2">التأكيد</div>
+                            <div class="mb-2">
+                                <label class="form-label">Refund method</label>
+                                <select class="form-select" @bind="_refundMethod">
+                                    <option value="Cash">Cash</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">ملاحظة (اختياري)</label>
+                                <InputText class="form-control" @bind-Value="_note" />
+                            </div>
+                            <button class="btn btn-danger w-100" @onclick="SubmitReturn" disabled="@(_busy || ReturnTotal <= 0)">تسجيل المرتجع</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private bool _busy;
+    private string? _error;
+    private string? _success;
+
+    private string _saleNo = "";
+    private string _refundMethod = "Cash";
+    private string? _note;
+
+    private SaleDetails? _sale;
+    private List<ReturnLine> _returnLines = [];
+
+    private decimal ReturnTotal => _returnLines.Sum(x => x.LineTotal);
+
+    protected override Task OnInitializedAsync() => Task.CompletedTask;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        await Session.EnsureLoadedAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadSale()
+    {
+        _success = null;
+        _error = null;
+        _sale = null;
+        _returnLines.Clear();
+
+        var saleNo = _saleNo.Trim();
+        if (string.IsNullOrWhiteSpace(saleNo))
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            _sale = await Api.GetAsync<SaleDetails>($"pos/sales/by-number/{Uri.EscapeDataString(saleNo)}");
+            _returnLines = _sale.Items.Select(x => new ReturnLine
+            {
+                ProductId = x.ProductId,
+                ProductName = x.ProductName,
+                SoldQty = x.Qty,
+                ReturnQty = 0,
+                UnitPrice = x.UnitPrice,
+                DiscountPerUnit = x.Qty == 0 ? 0 : (x.Discount / x.Qty)
+            }).ToList();
+        }
+        catch (ApiUnauthorizedException)
+        {
+            await Session.EnsureLoadedAsync();
+            if (Session.IsLoggedIn)
+            {
+                await Session.ClearAsync();
+            }
+            Nav.NavigateTo("/login", forceLoad: true);
+        }
+        catch (ApiHttpException ex)
+        {
+            _error = string.IsNullOrWhiteSpace(ex.Body) ? ex.Message : ex.Body;
+        }
+        catch
+        {
+            _error = "لم يتم العثور على الفاتورة.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task SubmitReturn()
+    {
+        _success = null;
+        _error = null;
+
+        if (_sale is null)
+        {
+            return;
+        }
+
+        var lines = _returnLines
+            .Where(x => x.ReturnQty > 0)
+            .Select(x => new { productId = x.ProductId, qty = x.ReturnQty, unitPrice = x.UnitPrice, discount = x.Discount })
+            .ToArray();
+
+        if (lines.Length == 0)
+        {
+            _error = "اختر كمية للمرتجع.";
+            return;
+        }
+
+        foreach (var line in _returnLines)
+        {
+            if (line.ReturnQty < 0 || line.ReturnQty > line.SoldQty)
+            {
+                _error = "كمية مرتجع غير صحيحة.";
+                return;
+            }
+        }
+
+        _busy = true;
+        try
+        {
+            var response = await Api.PostAsync("pos/returns", new
+            {
+                branchId = Session.BranchId,
+                origSaleId = _sale.SaleId,
+                items = lines,
+                refundMethod = _refundMethod,
+                note = string.IsNullOrWhiteSpace(_note) ? null : _note
+            }, new Dictionary<string, string>
+            {
+                ["Idempotency-Key"] = Guid.NewGuid().ToString()
+            });
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = await response.Content.ReadAsStringAsync();
+                return;
+            }
+
+            var body = await response.Content.ReadFromJsonAsync<CreateReturnResponse>(new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+            _success = $"تم تسجيل المرتجع: {body?.ReturnNo}";
+
+            _sale = null;
+            _returnLines.Clear();
+            _note = null;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private sealed class SaleDetails
+    {
+        public Guid SaleId { get; set; }
+        public string SaleNo { get; set; } = "";
+        public Guid BranchId { get; set; }
+        public DateTimeOffset At { get; set; }
+        public decimal Total { get; set; }
+        public List<SaleItem> Items { get; set; } = [];
+        public List<SalePayment> Payments { get; set; } = [];
+    }
+
+    private sealed class SaleItem
+    {
+        public Guid ProductId { get; set; }
+        public string ProductName { get; set; } = "";
+        public decimal Qty { get; set; }
+        public decimal UnitPrice { get; set; }
+        public decimal Discount { get; set; }
+        public decimal LineTotal { get; set; }
+    }
+
+    private sealed class SalePayment
+    {
+        public string Method { get; set; } = "";
+        public decimal Amount { get; set; }
+    }
+
+    private sealed class ReturnLine
+    {
+        public Guid ProductId { get; set; }
+        public string ProductName { get; set; } = "";
+        public decimal SoldQty { get; set; }
+        public decimal ReturnQty { get; set; }
+        public decimal UnitPrice { get; set; }
+        public decimal DiscountPerUnit { get; set; }
+        public decimal Discount => DiscountPerUnit * ReturnQty;
+        public decimal LineTotal => (ReturnQty * UnitPrice) - Discount;
+    }
+
+    private sealed class CreateReturnResponse
+    {
+        public Guid ReturnId { get; set; }
+        public string ReturnNo { get; set; } = "";
+        public decimal Total { get; set; }
+    }
+}

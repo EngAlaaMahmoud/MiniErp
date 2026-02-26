@@ -12,6 +12,12 @@ public sealed class HttpHeaderTenantProvider(IHttpContextAccessor httpContextAcc
                 return Guid.Empty;
             }
 
+            var claim = httpContext.User.FindFirst("tenant_id")?.Value;
+            if (Guid.TryParse(claim, out var fromClaim) && fromClaim != Guid.Empty)
+            {
+                return fromClaim;
+            }
+
             if (!httpContext.Request.Headers.TryGetValue("X-Tenant-Id", out var raw))
             {
                 return Guid.Empty;

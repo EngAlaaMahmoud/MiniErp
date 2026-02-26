@@ -1,0 +1,314 @@
+@page "/pos"
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@inject ApiSession Session
+@inject ApiClient Api
+@inject NavigationManager Nav
+
+<PageTitle>فاتورة</PageTitle>
+
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="h3 m-0">فاتورة</h1>
+        <div class="d-flex gap-2">
+            <a class="btn btn-outline-secondary" href="/">لوحة التحكم</a>
+        </div>
+    </div>
+
+    @if (!Session.IsLoggedIn)
+    {
+        <div class="alert alert-warning">مطلوب تسجيل الدخول.</div>
+        <a class="btn btn-primary" href="/login">تسجيل الدخول</a>
+    }
+    else
+    {
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <div class="alert alert-danger">@_error</div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(_success))
+        {
+            <div class="alert alert-success">@_success</div>
+        }
+
+        <div class="row g-3">
+            <div class="col-lg-8">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="d-flex gap-2 mb-3">
+                            <input class="form-control" placeholder="Barcode..." @bind="_barcode" @bind:event="oninput" @onkeydown="OnBarcodeKeyDown" />
+                            <button class="btn btn-outline-primary" @onclick="LookupAndAdd" disabled="@_busy">إضافة</button>
+                            <button class="btn btn-outline-secondary" @onclick="Clear" disabled="@_busy">مسح</button>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-sm table-striped align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>المنتج</th>
+                                        <th class="text-end">Qty</th>
+                                        <th class="text-end">السعر</th>
+                                        <th class="text-end">خصم</th>
+                                        <th class="text-end">الإجمالي</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @for (var i = 0; i < _cart.Count; i++)
+                                    {
+                                        var line = _cart[i];
+                                        <tr>
+                                            <td>@line.Name</td>
+                                            <td class="text-end" style="width:120px">
+                                                <InputNumber class="form-control form-control-sm text-end" @bind-Value="line.Qty" @bind-Value:event="oninput" />
+                                            </td>
+                                            <td class="text-end" style="width:140px">
+                                                <InputNumber class="form-control form-control-sm text-end" @bind-Value="line.UnitPrice" @bind-Value:event="oninput" />
+                                            </td>
+                                            <td class="text-end" style="width:140px">
+                                                <InputNumber class="form-control form-control-sm text-end" @bind-Value="line.Discount" @bind-Value:event="oninput" />
+                                            </td>
+                                            <td class="text-end">@line.LineTotal</td>
+                                            <td class="text-end" style="width:90px">
+                                                <button class="btn btn-sm btn-outline-danger" @onclick="() => Remove(i)">حذف</button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                                <tfoot>
+                                    <tr>
+                                        <th colspan="4" class="text-end">الإجمالي</th>
+                                        <th class="text-end">@Total</th>
+                                        <th></th>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-4">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="fw-bold mb-2">الدفع</div>
+                        <div class="mb-2">
+                            <label class="form-label">Cash</label>
+                            <InputNumber class="form-control text-end" @bind-Value="_cash" @bind-Value:event="oninput" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">ملاحظة (اختياري)</label>
+                            <InputText class="form-control" @bind-Value="_note" />
+                        </div>
+                        <button class="btn btn-success w-100" @onclick="Pay" disabled="@(_busy || _cart.Count == 0)">دفع</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _busy;
+    private string? _error;
+    private string? _success;
+    private string _barcode = "";
+    private decimal _cash;
+    private string? _note;
+
+    private readonly List<CartLine> _cart = [];
+
+    private decimal Total => _cart.Sum(x => x.LineTotal);
+
+    protected override Task OnInitializedAsync()
+    {
+        _cash = 0;
+        return Task.CompletedTask;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        await Session.EnsureLoadedAsync();
+        StateHasChanged();
+    }
+
+    private async Task OnBarcodeKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await LookupAndAdd();
+        }
+    }
+
+    private async Task LookupAndAdd()
+    {
+        _success = null;
+        _error = null;
+        var code = _barcode.Trim();
+        if (string.IsNullOrWhiteSpace(code))
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var item = await Api.GetAsync<BarcodeLookup>($"catalog/lookup/barcode/{Uri.EscapeDataString(code)}");
+            var existing = _cart.SingleOrDefault(x => x.ProductId == item.ProductId);
+            if (existing is not null)
+            {
+                existing.Qty += 1;
+            }
+            else
+            {
+                _cart.Add(new CartLine(item.ProductId, item.Name, 1, item.Price, 0));
+            }
+
+            _barcode = "";
+            _cash = Total;
+        }
+        catch (ApiUnauthorizedException)
+        {
+            await Session.EnsureLoadedAsync();
+            if (Session.IsLoggedIn)
+            {
+                await Session.ClearAsync();
+            }
+            Nav.NavigateTo("/login", forceLoad: true);
+        }
+        catch (ApiHttpException ex)
+        {
+            _error = string.IsNullOrWhiteSpace(ex.Body) ? ex.Message : ex.Body;
+        }
+        catch
+        {
+            _error = "Barcode غير موجود.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void Remove(int index)
+    {
+        _cart.RemoveAt(index);
+        _cash = Total;
+    }
+
+    private void Clear()
+    {
+        _cart.Clear();
+        _cash = 0;
+        _note = null;
+        _error = null;
+    }
+
+    private async Task Pay()
+    {
+        _success = null;
+        _error = null;
+
+        if (_cart.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var line in _cart)
+        {
+            if (line.Qty <= 0 || line.UnitPrice < 0 || line.Discount < 0 || line.LineTotal < 0)
+            {
+                _error = "سطر غير صحيح.";
+                return;
+            }
+        }
+
+        var total = Total;
+        if (total <= 0)
+        {
+            _error = "الإجمالي غير صحيح.";
+            return;
+        }
+
+        if (_cash < total)
+        {
+            _error = "Cash أقل من الإجمالي.";
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var idempotencyKey = Guid.NewGuid().ToString();
+            var response = await Api.PostAsync("pos/sales", new
+            {
+                branchId = Session.BranchId,
+                items = _cart.Select(x => new
+                {
+                    productId = x.ProductId,
+                    qty = x.Qty,
+                    unitPrice = x.UnitPrice,
+                    discount = x.Discount
+                }).ToArray(),
+                payments = new[] { new { method = "Cash", amount = total } },
+                note = string.IsNullOrWhiteSpace(_note) ? null : _note
+            }, new Dictionary<string, string>
+            {
+                ["Idempotency-Key"] = idempotencyKey
+            });
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = await response.Content.ReadAsStringAsync();
+                return;
+            }
+
+            var body = await response.Content.ReadFromJsonAsync<CreateSaleResponse>(new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+            _success = $"تم تسجيل الفاتورة: {body?.SaleNo}";
+            Clear();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private sealed class CartLine
+    {
+        public CartLine(Guid productId, string name, decimal qty, decimal unitPrice, decimal discount)
+        {
+            ProductId = productId;
+            Name = name;
+            Qty = qty;
+            UnitPrice = unitPrice;
+            Discount = discount;
+        }
+
+        public Guid ProductId { get; }
+        public string Name { get; }
+        public decimal Qty { get; set; }
+        public decimal UnitPrice { get; set; }
+        public decimal Discount { get; set; }
+        public decimal LineTotal => (Qty * UnitPrice) - Discount;
+    }
+
+    private sealed class BarcodeLookup
+    {
+        public Guid ProductId { get; set; }
+        public string Name { get; set; } = "";
+        public decimal Price { get; set; }
+        public string Barcode { get; set; } = "";
+    }
+
+    private sealed class CreateSaleResponse
+    {
+        public Guid SaleId { get; set; }
+        public string SaleNo { get; set; } = "";
+        public decimal Total { get; set; }
+    }
+}

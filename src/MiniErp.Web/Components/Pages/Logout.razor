@@ -1,0 +1,20 @@
+@page "/logout"
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@inject ApiSession Session
+@inject NavigationManager Nav
+
+<PageTitle>خروج</PageTitle>
+
+@code {
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        await Session.EnsureLoadedAsync();
+        await Session.ClearAsync();
+        Nav.NavigateTo("/login", forceLoad: true);
+    }
+}

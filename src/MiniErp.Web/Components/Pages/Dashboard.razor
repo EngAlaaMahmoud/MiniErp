@@ -1,0 +1,68 @@
+@page "/"
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@inject ApiSession Session
+@inject NavigationManager Nav
+
+<PageTitle>لوحة التحكم</PageTitle>
+
+<div class="container">
+    <h1 class="h3 mb-3">لوحة التحكم</h1>
+
+    @if (!_ready)
+    {
+        <div>...</div>
+    }
+    else if (!Session.IsLoggedIn)
+    {
+        <div class="alert alert-warning">مطلوب تسجيل الدخول.</div>
+        <button class="btn btn-primary" @onclick="@(() => Nav.NavigateTo("/login"))">تسجيل الدخول</button>
+    }
+    else
+    {
+        <div class="row g-3">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="fw-bold mb-2">الحساب</div>
+                        <div>المستخدم: <code>@Session.UserName</code> (@Session.Role)</div>
+                        <div>Tenant: <code>@Session.TenantId</code></div>
+                        <div>Branch: <code>@Session.BranchId</code></div>
+                        <div>Device: <code>@Session.DeviceId</code></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="fw-bold mb-2">روابط سريعة</div>
+                        <div class="d-flex gap-2 flex-wrap">
+                            <NavLink class="btn btn-outline-primary" href="/products">المنتجات</NavLink>
+                            <NavLink class="btn btn-outline-primary" href="/inventory">المخزون</NavLink>
+                            <NavLink class="btn btn-outline-success" href="/pos">فاتورة</NavLink>
+                            <NavLink class="btn btn-outline-danger" href="/returns">مرتجع</NavLink>
+                            <NavLink class="btn btn-outline-secondary" href="/logout">خروج</NavLink>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _ready;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        await Session.EnsureLoadedAsync();
+        _ready = true;
+        StateHasChanged();
+    }
+}
+

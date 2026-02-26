@@ -1,4 +1,7 @@
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -30,6 +33,31 @@ builder.Services.AddDbContext<MiniErp.Api.Data.AppDbContext>((sp, options) =>
     throw new InvalidOperationException("Missing connection string. Set ConnectionStrings:SqlServerLocalDb (recommended) or ConnectionStrings:Postgres.");
 });
 builder.Services.AddScoped<MiniErp.Api.Services.IdempotencyService>();
+builder.Services.AddSingleton<MiniErp.Api.Services.PinHasher>();
+builder.Services.Configure<MiniErp.Api.Services.JwtOptions>(builder.Configuration.GetSection("Jwt"));
+builder.Services.AddSingleton<MiniErp.Api.Services.JwtTokenService>();
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        var jwt = builder.Configuration.GetSection("Jwt").Get<MiniErp.Api.Services.JwtOptions>() ?? new MiniErp.Api.Services.JwtOptions();
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = jwt.Issuer,
+            ValidAudience = jwt.Audience,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt.Key))
+        };
+    });
+builder.Services.AddAuthorization();
+
+if (builder.Environment.IsDevelopment())
+{
+    builder.Services.AddHostedService<MiniErp.Api.Infrastructure.Dev.DevSeeder>();
+}
 
 var app = builder.Build();
 
@@ -41,6 +69,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapControllers();
 

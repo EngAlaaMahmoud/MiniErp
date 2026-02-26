@@ -12,6 +12,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options, ITenant
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<Branch> Branches => Set<Branch>();
     public DbSet<Device> Devices => Set<Device>();
+    public DbSet<User> Users => Set<User>();
 
     public DbSet<Product> Products => Set<Product>();
     public DbSet<Barcode> Barcodes => Set<Barcode>();
@@ -31,6 +32,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options, ITenant
 
     public DbSet<IdempotencyKey> IdempotencyKeys => Set<IdempotencyKey>();
     public DbSet<Counter> Counters => Set<Counter>();
+    public DbSet<InventoryAdjustment> InventoryAdjustments => Set<InventoryAdjustment>();
+    public DbSet<InventoryAdjustmentLine> InventoryAdjustmentLines => Set<InventoryAdjustmentLine>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -58,6 +61,17 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options, ITenant
             b.HasIndex(x => new { x.TenantId, x.BranchId });
             b.HasIndex(x => new { x.TenantId, x.DeviceKey }).IsUnique();
             b.Property(x => x.DeviceKey).HasMaxLength(200).IsRequired();
+            b.HasQueryFilter(x => x.TenantId == TenantId);
+        });
+
+        modelBuilder.Entity<User>(b =>
+        {
+            b.ToTable("Users");
+            b.HasKey(x => x.Id);
+            b.HasIndex(x => new { x.TenantId, x.Name }).IsUnique();
+            b.Property(x => x.Name).HasMaxLength(200).IsRequired();
+            b.Property(x => x.PinHash).HasMaxLength(300).IsRequired();
+            b.Property(x => x.Role).HasConversion<int>();
             b.HasQueryFilter(x => x.TenantId == TenantId);
         });
 
@@ -195,7 +209,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options, ITenant
             b.Property(x => x.Key).HasMaxLength(100).IsRequired();
             b.Property(x => x.Endpoint).HasMaxLength(200).IsRequired();
             b.Property(x => x.RequestHash).HasMaxLength(128).IsRequired();
-            b.Property(x => x.ResponseBody).HasColumnType("text");
+            b.Property(x => x.ResponseBody);
             b.HasQueryFilter(x => x.TenantId == TenantId);
         });
 
@@ -206,6 +220,25 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options, ITenant
             b.Property(x => x.Name).HasMaxLength(50).IsRequired();
             b.HasQueryFilter(x => x.TenantId == TenantId);
         });
+
+        modelBuilder.Entity<InventoryAdjustment>(b =>
+        {
+            b.ToTable("InventoryAdjustments");
+            b.HasKey(x => x.Id);
+            b.HasIndex(x => new { x.TenantId, x.BranchId, x.At });
+            b.HasIndex(x => new { x.TenantId, x.Number }).IsUnique();
+            b.Property(x => x.Number).HasMaxLength(50).IsRequired();
+            b.Property(x => x.Note).HasMaxLength(1000);
+            b.HasQueryFilter(x => x.TenantId == TenantId);
+        });
+
+        modelBuilder.Entity<InventoryAdjustmentLine>(b =>
+        {
+            b.ToTable("InventoryAdjustmentLines");
+            b.HasKey(x => x.Id);
+            b.HasIndex(x => new { x.TenantId, x.AdjustmentId });
+            b.Property(x => x.QtyDelta).HasPrecision(18, 3);
+            b.HasQueryFilter(x => x.TenantId == TenantId);
+        });
     }
 }
-

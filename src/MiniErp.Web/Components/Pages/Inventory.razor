@@ -1,0 +1,256 @@
+@page "/inventory"
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@inject ApiSession Session
+@inject ApiClient Api
+@inject NavigationManager Nav
+
+<PageTitle>المخزون</PageTitle>
+
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="h3 m-0">المخزون</h1>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-primary" @onclick="Reload" disabled="@_busy">تحديث</button>
+            <a class="btn btn-outline-secondary" href="/">رجوع</a>
+        </div>
+    </div>
+
+    @if (!Session.IsLoggedIn)
+    {
+        <div class="alert alert-warning">مطلوب تسجيل الدخول.</div>
+        <a class="btn btn-primary" href="/login">تسجيل الدخول</a>
+    }
+    else
+    {
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <div class="alert alert-danger">@_error</div>
+        }
+
+        <div class="row g-3">
+            <div class="col-lg-7">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="fw-bold mb-2">رصيد المخزون (Branch: <code>@Session.BranchId</code>)</div>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-striped align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>المنتج</th>
+                                        <th class="text-end">الكمية</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var b in _balance)
+                                    {
+                                        <tr>
+                                            <td>@b.ProductName</td>
+                                            <td class="text-end">@b.Qty</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-5">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="fw-bold mb-2">تسوية مخزون (Adjustment)</div>
+
+                        <div class="mb-2">
+                            <label class="form-label">منتج</label>
+                            <select class="form-select" @bind="_lineProductId">
+                                <option value="">اختر...</option>
+                                @foreach (var p in _products)
+                                {
+                                    <option value="@p.Id">@p.Name</option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="mb-2">
+                            <label class="form-label">QtyDelta (موجب/سالب)</label>
+                            <InputNumber class="form-control" @bind-Value="_lineQtyDelta" />
+                        </div>
+
+                        <button class="btn btn-outline-secondary w-100 mb-3" @onclick="AddLine" disabled="@_busy">إضافة سطر</button>
+
+                        @if (_lines.Count != 0)
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>المنتج</th>
+                                            <th class="text-end">QtyDelta</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @for (var i = 0; i < _lines.Count; i++)
+                                        {
+                                            <tr>
+                                                <td>@_lines[i].ProductName</td>
+                                                <td class="text-end">@_lines[i].QtyDelta</td>
+                                                <td class="text-end">
+                                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveLine(i)">حذف</button>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+
+                        <div class="mb-2">
+                            <label class="form-label">ملاحظة (اختياري)</label>
+                            <InputText class="form-control" @bind-Value="_note" />
+                        </div>
+
+                        <button class="btn btn-primary w-100" @onclick="Submit" disabled="@(_busy || _lines.Count == 0)">حفظ التسوية</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _busy;
+    private string? _error;
+    private List<ProductItem> _products = [];
+    private List<BalanceItem> _balance = [];
+
+    private string _lineProductId = "";
+    private decimal _lineQtyDelta;
+    private string? _note;
+    private List<AdjustmentLineUi> _lines = [];
+    private bool _initialLoadDone;
+
+    protected override Task OnInitializedAsync() => Task.CompletedTask;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _initialLoadDone)
+        {
+            return;
+        }
+
+        _initialLoadDone = true;
+        await Session.EnsureLoadedAsync();
+        if (Session.IsLoggedIn)
+        {
+            await Reload();
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task Reload()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            _products = await Api.GetAsync<List<ProductItem>>("catalog/products");
+            _balance = await Api.GetAsync<List<BalanceItem>>($"inventory/balance?branchId={Session.BranchId}");
+        }
+        catch (ApiUnauthorizedException)
+        {
+            await Session.EnsureLoadedAsync();
+            if (Session.IsLoggedIn)
+            {
+                await Session.ClearAsync();
+            }
+            Nav.NavigateTo("/login", forceLoad: true);
+        }
+        catch (ApiHttpException ex)
+        {
+            _error = string.IsNullOrWhiteSpace(ex.Body) ? ex.Message : ex.Body;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void AddLine()
+    {
+        _error = null;
+        if (!Guid.TryParse(_lineProductId, out var productId) || productId == Guid.Empty)
+        {
+            _error = "اختر منتج";
+            return;
+        }
+
+        if (_lineQtyDelta == 0)
+        {
+            _error = "QtyDelta لازم يكون غير 0";
+            return;
+        }
+
+        var product = _products.Single(x => x.Id == productId);
+        _lines.Add(new AdjustmentLineUi(productId, product.Name, _lineQtyDelta));
+
+        _lineProductId = "";
+        _lineQtyDelta = 0;
+    }
+
+    private void RemoveLine(int index) => _lines.RemoveAt(index);
+
+    private async Task Submit()
+    {
+        if (_lines.Count == 0)
+        {
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            var response = await Api.PostAsync("inventory/adjustments", new
+            {
+                branchId = Session.BranchId,
+                lines = _lines.Select(x => new { productId = x.ProductId, qtyDelta = x.QtyDelta }).ToArray(),
+                note = string.IsNullOrWhiteSpace(_note) ? null : _note
+            });
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = await response.Content.ReadAsStringAsync();
+                return;
+            }
+
+            _lines.Clear();
+            _note = null;
+            await Reload();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private sealed class ProductItem
+    {
+        public Guid Id { get; set; }
+        public string Name { get; set; } = "";
+    }
+
+    private sealed class BalanceItem
+    {
+        public Guid ProductId { get; set; }
+        public string ProductName { get; set; } = "";
+        public decimal Qty { get; set; }
+    }
+
+    private sealed record AdjustmentLineUi(Guid ProductId, string ProductName, decimal QtyDelta);
+}

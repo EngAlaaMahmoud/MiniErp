@@ -1,0 +1,337 @@
+@page "/products"
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@inject ApiSession Session
+@inject ApiClient Api
+@inject NavigationManager Nav
+
+<PageTitle>المنتجات</PageTitle>
+
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="h3 m-0">المنتجات</h1>
+        <a class="btn btn-outline-secondary" href="/">رجوع</a>
+    </div>
+
+    @if (!Session.IsLoggedIn)
+    {
+        <div class="alert alert-warning">مطلوب تسجيل الدخول.</div>
+        <a class="btn btn-primary" href="/login">تسجيل الدخول</a>
+    }
+    else
+    {
+        <div class="row g-3">
+            <div class="col-lg-7">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="d-flex gap-2 mb-2">
+                            <input class="form-control" placeholder="بحث بالاسم أو SKU..." @bind="_search" @bind:event="oninput" />
+                            <button class="btn btn-outline-primary" @onclick="Load">تحديث</button>
+                        </div>
+
+                        @if (!string.IsNullOrWhiteSpace(_error))
+                        {
+                            <div class="alert alert-danger">@_error</div>
+                        }
+
+                        <div class="table-responsive">
+                            <table class="table table-sm table-striped align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>الاسم</th>
+                                        <th>SKU</th>
+                                        <th class="text-end">السعر</th>
+                                        <th class="text-end">التكلفة</th>
+                                        <th>نشط</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var p in _products)
+                                    {
+                                        <tr>
+                                            <td>@p.Name</td>
+                                            <td class="text-muted">@p.Sku</td>
+                                            <td class="text-end">@p.Price</td>
+                                            <td class="text-end text-muted">@p.Cost</td>
+                                            <td>@(p.IsActive ? "نعم" : "لا")</td>
+                                            <td class="text-end">
+                                                <button class="btn btn-sm btn-outline-secondary" @onclick="() => SelectForEdit(p)">تعديل</button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-5">
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <div class="fw-bold mb-2">إضافة منتج</div>
+                        <EditForm Model="_create" OnValidSubmit="Create">
+                            <DataAnnotationsValidator />
+                            <div class="mb-2">
+                                <label class="form-label">الاسم</label>
+                                <InputText class="form-control" @bind-Value="_create.Name" />
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label">SKU (اختياري)</label>
+                                <InputText class="form-control" @bind-Value="_create.Sku" />
+                            </div>
+                            <div class="row g-2">
+                                <div class="col">
+                                    <label class="form-label">السعر</label>
+                                    <InputNumber class="form-control" @bind-Value="_create.Price" />
+                                </div>
+                                <div class="col">
+                                    <label class="form-label">التكلفة</label>
+                                    <InputNumber class="form-control" @bind-Value="_create.Cost" />
+                                </div>
+                            </div>
+                            <div class="form-check mt-2 mb-3">
+                                <InputCheckbox class="form-check-input" @bind-Value="_create.IsActive" />
+                                <label class="form-check-label">نشط</label>
+                            </div>
+                            <button class="btn btn-primary w-100" disabled="@_busy">حفظ</button>
+                        </EditForm>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-body">
+                        <div class="fw-bold mb-2">تعديل منتج</div>
+                        @if (_edit is null)
+                        {
+                            <div class="text-muted">اختر منتج من القائمة.</div>
+                        }
+                        else
+                        {
+                            <EditForm Model="_edit" OnValidSubmit="SaveEdit">
+                                <DataAnnotationsValidator />
+                                <div class="mb-2">
+                                    <label class="form-label">الاسم</label>
+                                    <InputText class="form-control" @bind-Value="_edit.Name" />
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label">SKU</label>
+                                    <InputText class="form-control" @bind-Value="_edit.Sku" />
+                                </div>
+                                <div class="row g-2">
+                                    <div class="col">
+                                        <label class="form-label">السعر</label>
+                                        <InputNumber class="form-control" @bind-Value="_edit.Price" />
+                                    </div>
+                                    <div class="col">
+                                        <label class="form-label">التكلفة</label>
+                                        <InputNumber class="form-control" @bind-Value="_edit.Cost" />
+                                    </div>
+                                </div>
+                                <div class="form-check mt-2 mb-3">
+                                    <InputCheckbox class="form-check-input" @bind-Value="_edit.IsActive" />
+                                    <label class="form-check-label">نشط</label>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">إضافة باركود</label>
+                                    <div class="d-flex gap-2">
+                                        <InputText class="form-control" @bind-Value="_barcode" />
+                                        <button class="btn btn-outline-primary" type="button" @onclick="AddBarcode">إضافة</button>
+                                    </div>
+                                </div>
+
+                                <button class="btn btn-success w-100" disabled="@_busy">حفظ التعديلات</button>
+                            </EditForm>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _busy;
+    private string? _error;
+    private string _search = "";
+    private List<ProductItem> _products = [];
+    private CreateProductModel _create = new() { IsActive = true };
+    private EditProductModel? _edit;
+    private string _barcode = "";
+    private bool _initialLoadDone;
+
+    protected override Task OnInitializedAsync() => Task.CompletedTask;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _initialLoadDone)
+        {
+            return;
+        }
+
+        _initialLoadDone = true;
+        await Session.EnsureLoadedAsync();
+        if (Session.IsLoggedIn)
+        {
+            await Load();
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task Load()
+    {
+        _error = null;
+        try
+        {
+            var q = string.IsNullOrWhiteSpace(_search) ? "" : $"?search={Uri.EscapeDataString(_search)}";
+            _products = await Api.GetAsync<List<ProductItem>>($"catalog/products{q}");
+        }
+        catch (ApiUnauthorizedException)
+        {
+            await Session.EnsureLoadedAsync();
+            if (Session.IsLoggedIn)
+            {
+                await Session.ClearAsync();
+            }
+            Nav.NavigateTo("/login", forceLoad: true);
+        }
+        catch (ApiHttpException ex)
+        {
+            _error = string.IsNullOrWhiteSpace(ex.Body) ? ex.Message : ex.Body;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task Create()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var response = await Api.PostAsync("catalog/products", new
+            {
+                name = _create.Name,
+                sku = string.IsNullOrWhiteSpace(_create.Sku) ? null : _create.Sku,
+                price = _create.Price,
+                cost = _create.Cost,
+                isActive = _create.IsActive
+            });
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = await response.Content.ReadAsStringAsync();
+                return;
+            }
+
+            _create = new CreateProductModel { IsActive = true };
+            await Load();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void SelectForEdit(ProductItem p)
+    {
+        _edit = new EditProductModel
+        {
+            Id = p.Id,
+            Name = p.Name,
+            Sku = p.Sku,
+            Price = p.Price,
+            Cost = p.Cost,
+            IsActive = p.IsActive
+        };
+        _barcode = "";
+    }
+
+    private async Task SaveEdit()
+    {
+        if (_edit is null)
+        {
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            var response = await Api.PutAsync($"catalog/products/{_edit.Id}", new
+            {
+                name = _edit.Name,
+                sku = string.IsNullOrWhiteSpace(_edit.Sku) ? null : _edit.Sku,
+                price = _edit.Price,
+                cost = _edit.Cost,
+                isActive = _edit.IsActive
+            });
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = await response.Content.ReadAsStringAsync();
+                return;
+            }
+
+            await Load();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task AddBarcode()
+    {
+        if (_edit is null || string.IsNullOrWhiteSpace(_barcode))
+        {
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            var response = await Api.PostAsync($"catalog/products/{_edit.Id}/barcodes", new { code = _barcode.Trim() });
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = await response.Content.ReadAsStringAsync();
+                return;
+            }
+
+            _barcode = "";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private sealed class ProductItem
+    {
+        public Guid Id { get; set; }
+        public string Name { get; set; } = "";
+        public string? Sku { get; set; }
+        public decimal Price { get; set; }
+        public decimal Cost { get; set; }
+        public bool IsActive { get; set; }
+    }
+
+    private class CreateProductModel
+    {
+        public string Name { get; set; } = "";
+        public string? Sku { get; set; }
+        public decimal Price { get; set; }
+        public decimal Cost { get; set; }
+        public bool IsActive { get; set; }
+    }
+
+    private sealed class EditProductModel : CreateProductModel
+    {
+        public Guid Id { get; set; }
+    }
+}

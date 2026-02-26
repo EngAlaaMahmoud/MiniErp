@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Authorization;
 using MiniErp.Api.Contracts.Pos;
 using MiniErp.Api.Data;
 using MiniErp.Api.Domain;
@@ -12,8 +13,55 @@ namespace MiniErp.Api.Controllers;
 
 [ApiController]
 [Route("pos")]
+[Authorize]
 public sealed class PosController(AppDbContext db, IdempotencyService idempotencyService) : ControllerBase
 {
+    [HttpGet("sales/{saleId:guid}")]
+    public async Task<IActionResult> GetSale([FromRoute] Guid saleId, CancellationToken ct)
+    {
+        if (saleId == Guid.Empty)
+        {
+            return BadRequest(new { error = "INVALID_ID" });
+        }
+
+        var sale = await db.Sales.SingleOrDefaultAsync(x => x.Id == saleId, ct);
+        if (sale is null)
+        {
+            return NotFound(new { error = "NOT_FOUND" });
+        }
+
+        var items = await db.SaleItems
+            .Where(x => x.SaleId == saleId)
+            .Join(db.Products, si => si.ProductId, p => p.Id, (si, p) =>
+                new SaleDetailsItem(si.ProductId, p.Name, si.Qty, si.UnitPrice, si.Discount, si.LineTotal))
+            .OrderBy(x => x.ProductName)
+            .ToListAsync(ct);
+
+        var payments = await db.Payments
+            .Where(x => x.SaleId == saleId)
+            .Select(x => new SaleDetailsPayment(x.Method, x.Amount))
+            .ToListAsync(ct);
+
+        return Ok(new SaleDetailsResponse(sale.Id, sale.Number, sale.BranchId, sale.At, sale.Total, items, payments));
+    }
+
+    [HttpGet("sales/by-number/{saleNo}")]
+    public async Task<IActionResult> GetSaleByNumber([FromRoute] string saleNo, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(saleNo))
+        {
+            return BadRequest(new { error = "SALE_NO_REQUIRED" });
+        }
+
+        var sale = await db.Sales.SingleOrDefaultAsync(x => x.Number == saleNo, ct);
+        if (sale is null)
+        {
+            return NotFound(new { error = "NOT_FOUND" });
+        }
+
+        return await GetSale(sale.Id, ct);
+    }
+
     [HttpPost("sales")]
     public async Task<IActionResult> CreateSale([FromBody] CreateSaleRequest request, CancellationToken ct)
     {
@@ -23,11 +71,15 @@ public sealed class PosController(AppDbContext db, IdempotencyService idempotenc
             return BadRequest(new { error = "TENANT_REQUIRED", header = "X-Tenant-Id" });
         }
 
-        if (!Request.Headers.TryGetValue("X-Device-Id", out var rawDeviceId) ||
-            !Guid.TryParse(rawDeviceId.ToString(), out var deviceId) ||
-            deviceId == Guid.Empty)
+        var deviceClaim = User.FindFirst("device_id")?.Value;
+        if (!Guid.TryParse(deviceClaim, out var deviceId) || deviceId == Guid.Empty)
         {
-            return BadRequest(new { error = "DEVICE_REQUIRED", header = "X-Device-Id" });
+            if (!Request.Headers.TryGetValue("X-Device-Id", out var rawDeviceId) ||
+                !Guid.TryParse(rawDeviceId.ToString(), out deviceId) ||
+                deviceId == Guid.Empty)
+            {
+                return BadRequest(new { error = "DEVICE_REQUIRED", header = "X-Device-Id" });
+            }
         }
 
         if (!Request.Headers.TryGetValue("Idempotency-Key", out var rawKey) ||
@@ -227,11 +279,15 @@ public sealed class PosController(AppDbContext db, IdempotencyService idempotenc
             return BadRequest(new { error = "TENANT_REQUIRED", header = "X-Tenant-Id" });
         }
 
-        if (!Request.Headers.TryGetValue("X-Device-Id", out var rawDeviceId) ||
-            !Guid.TryParse(rawDeviceId.ToString(), out var deviceId) ||
-            deviceId == Guid.Empty)
+        var deviceClaim = User.FindFirst("device_id")?.Value;
+        if (!Guid.TryParse(deviceClaim, out var deviceId) || deviceId == Guid.Empty)
         {
-            return BadRequest(new { error = "DEVICE_REQUIRED", header = "X-Device-Id" });
+            if (!Request.Headers.TryGetValue("X-Device-Id", out var rawDeviceId) ||
+                !Guid.TryParse(rawDeviceId.ToString(), out deviceId) ||
+                deviceId == Guid.Empty)
+            {
+                return BadRequest(new { error = "DEVICE_REQUIRED", header = "X-Device-Id" });
+            }
         }
 
         if (!Request.Headers.TryGetValue("Idempotency-Key", out var rawKey) ||
