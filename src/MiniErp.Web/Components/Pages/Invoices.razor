@@ -1,0 +1,243 @@
+@page "/invoices"
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@inject ApiSession Session
+@inject ApiClient Api
+@inject NavigationManager Nav
+@using MiniErp.Web.Security
+
+<PageTitle>@L["Nav.Invoices"]</PageTitle>
+
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="h3 m-0">@L["Nav.Invoices"]</h1>
+        <div class="d-flex gap-2 align-items-center">
+            <div class="position-relative">
+                <button class="btn btn-primary" @onclick="ToggleAddMenu" disabled="@_busy">@L["Common.Add"]</button>
+                @if (_showAddMenu)
+                {
+                    <div class="dropdown-menu dropdown-menu-end show" style="position:absolute; right:0; top:100%;">
+                        @if (Session.HasPermission(PermissionKeys.SalesCreate))
+                        {
+                            <button class="dropdown-item" @onclick="GoToSales">@L["Nav.Sales"]</button>
+                        }
+                        @if (Session.HasPermission(PermissionKeys.PurchasesCreate))
+                        {
+                            <button class="dropdown-item" @onclick="GoToPurchases">@L["Nav.Purchases"]</button>
+                        }
+                    </div>
+                }
+            </div>
+            <button class="btn btn-outline-primary" @onclick="Reload" disabled="@_busy">@L["Common.Refresh"]</button>
+            <a class="btn btn-outline-secondary" href="/">@L["Common.Back"]</a>
+        </div>
+    </div>
+
+    @if (!_ready)
+    {
+        <div class="text-muted">@L["Common.Loading"]</div>
+    }
+    else if (!Session.IsLoggedIn)
+    {
+        <div class="alert alert-warning">@L["Auth.Required"]</div>
+        <a class="btn btn-primary" href="/login">@L["Auth.Login"]</a>
+    }
+    else if (!CanViewAny)
+    {
+        <div class="alert alert-danger">@L["Auth.Unauthorized"]</div>
+    }
+    else
+    {
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <div class="alert alert-danger">@_error</div>
+        }
+
+        <div class="card">
+            <div class="card-body">
+                <div class="fw-bold mb-2">@L["Invoices.LatestWithBranch", Session.BranchId]</div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped align-middle">
+                        <thead>
+                            <tr>
+                                <th>@L["Common.Type"]</th>
+                                <th>@L["Common.Number"]</th>
+                                <th>@L["Common.Date"]</th>
+                                <th>@L["Common.Party"]</th>
+                                <th class="text-end">@L["Common.Tax"]</th>
+                                <th class="text-end">@L["Common.Total"]</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var inv in _invoices)
+                            {
+                                <tr>
+                                    <td><span class="badge @inv.BadgeClass">@inv.TypeLabel</span></td>
+                                    <td><code>@inv.Number</code></td>
+                                    <td class="text-muted">@inv.At.LocalDateTime.ToString("yyyy-MM-dd HH:mm")</td>
+                                    <td>@(string.IsNullOrWhiteSpace(inv.PartyName) ? "-" : inv.PartyName)</td>
+                                    <td class="text-end">@inv.TaxTotal</td>
+                                    <td class="text-end">@inv.Total</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _ready;
+    private bool _busy;
+    private bool _showAddMenu;
+    private string? _error;
+
+    private List<InvoiceRow> _invoices = [];
+
+    private bool CanViewAny =>
+        Session.HasPermission(PermissionKeys.SalesView) ||
+        Session.HasPermission(PermissionKeys.PurchasesView);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        await Session.EnsureLoadedAsync();
+        _ready = true;
+        StateHasChanged();
+
+        if (Session.IsLoggedIn && CanViewAny)
+        {
+            await Reload();
+            StateHasChanged();
+        }
+    }
+
+    private void ToggleAddMenu()
+    {
+        _showAddMenu = !_showAddMenu;
+    }
+
+    private void GoToSales()
+    {
+        _showAddMenu = false;
+        Nav.NavigateTo("/pos");
+    }
+
+    private void GoToPurchases()
+    {
+        _showAddMenu = false;
+        Nav.NavigateTo("/purchases");
+    }
+
+    private async Task Reload()
+    {
+        _busy = true;
+        _error = null;
+        _showAddMenu = false;
+        try
+        {
+            var rows = new List<InvoiceRow>();
+
+            if (Session.HasPermission(PermissionKeys.SalesView))
+            {
+                var sales = await Api.GetAsync<List<SaleItem>>($"pos/sales?branchId={Session.BranchId}");
+                rows.AddRange(sales.Select(x => new InvoiceRow
+                {
+                    At = x.At,
+                    TypeLabel = L["Nav.Sales"].Value,
+                    BadgeClass = "text-bg-success",
+                    Number = x.Number,
+                    PartyName = x.CustomerName,
+                    Total = x.Total,
+                    TaxTotal = x.TaxTotal
+                }));
+            }
+
+            if (Session.HasPermission(PermissionKeys.PurchasesView))
+            {
+                var purchases = await Api.GetAsync<List<PurchaseItem>>($"purchases?branchId={Session.BranchId}");
+                rows.AddRange(purchases.Select(x => new InvoiceRow
+                {
+                    At = x.At,
+                    TypeLabel = L["Nav.Purchases"].Value,
+                    BadgeClass = "text-bg-primary",
+                    Number = x.Number,
+                    PartyName = x.SupplierName,
+                    Total = x.Total,
+                    TaxTotal = x.TaxTotal
+                }));
+            }
+
+            _invoices = rows
+                .OrderByDescending(x => x.At)
+                .Take(400)
+                .ToList();
+        }
+        catch (ApiUnauthorizedException ex)
+        {
+            if (ex.WasAuthenticated)
+            {
+                await Session.ClearAsync();
+            }
+            RedirectToLogin();
+        }
+        catch (ApiHttpException ex)
+        {
+            _error = string.IsNullOrWhiteSpace(ex.Body) ? ex.Message : ex.Body;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void RedirectToLogin()
+    {
+        var relative = Nav.ToBaseRelativePath(Nav.Uri);
+        var target = string.IsNullOrWhiteSpace(relative) ? "/login" : $"/login?return=/{Uri.EscapeDataString(relative)}";
+        Nav.NavigateTo(target);
+    }
+
+    private sealed class InvoiceRow
+    {
+        public DateTimeOffset At { get; set; }
+        public string TypeLabel { get; set; } = "";
+        public string BadgeClass { get; set; } = "text-bg-secondary";
+        public string Number { get; set; } = "";
+        public string? PartyName { get; set; }
+        public decimal Total { get; set; }
+        public decimal TaxTotal { get; set; }
+    }
+
+    private sealed class SaleItem
+    {
+        public Guid Id { get; set; }
+        public string Number { get; set; } = "";
+        public Guid BranchId { get; set; }
+        public DateTimeOffset At { get; set; }
+        public string? CustomerName { get; set; }
+        public decimal Total { get; set; }
+        public decimal TaxTotal { get; set; }
+    }
+
+    private sealed class PurchaseItem
+    {
+        public Guid Id { get; set; }
+        public string Number { get; set; } = "";
+        public Guid BranchId { get; set; }
+        public DateTimeOffset At { get; set; }
+        public string? SupplierName { get; set; }
+        public decimal Total { get; set; }
+        public decimal CashPaid { get; set; }
+        public decimal TaxTotal { get; set; }
+    }
+}

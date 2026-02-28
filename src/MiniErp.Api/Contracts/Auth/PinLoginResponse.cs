@@ -10,4 +10,3 @@ public sealed record PinLoginResponse(
     Guid TenantId,
     Guid DeviceId
 );
-

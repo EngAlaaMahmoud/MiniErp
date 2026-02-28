@@ -1,0 +1,322 @@
+@page "/permissions"
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@inject ApiSession Session
+@inject ApiClient Api
+@inject NavigationManager Nav
+@using MiniErp.Web.Security
+
+<PageTitle>الصلاحيات</PageTitle>
+
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="h3 m-0">صلاحيات المستخدمين</h1>
+        <a class="btn btn-outline-secondary" href="/">@L["Common.Back"]</a>
+    </div>
+
+    @if (!_ready)
+    {
+        <div class="text-muted">Loading...</div>
+    }
+    else if (!Session.IsLoggedIn)
+    {
+        <div class="alert alert-warning">مطلوب تسجيل الدخول.</div>
+        <a class="btn btn-primary" href="/login">تسجيل الدخول</a>
+    }
+    else if (!CanUse)
+    {
+        <div class="alert alert-danger">غير مصرح.</div>
+    }
+    else
+    {
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <div class="alert alert-danger">@_error</div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(_success))
+        {
+            <div class="alert alert-success">@_success</div>
+        }
+
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="row g-2 align-items-end">
+                    <div class="col-12 col-lg-5">
+                        <label class="form-label">المستخدم</label>
+                        <select class="form-select" value="@_selectedUserId" @onchange="OnUserChanged" disabled="@_busy">
+                            <option value="">اختر...</option>
+                            @foreach (var u in _users.Where(x => x.IsActive).OrderBy(x => x.Name))
+                            {
+                                <option value="@u.Id">@u.Name (@RoleLabel(u.Role))</option>
+                            }
+                        </select>
+                        @if (!string.IsNullOrWhiteSpace(_selectedUserId))
+                        {
+                            <div class="small text-muted mt-1">تعديل صلاحيات مستخدم محدد (Override/Inherit).</div>
+                        }
+                    </div>
+
+                    <div class="col-12 col-lg-4">
+                        <div class="form-check mt-4">
+                            <input class="form-check-input" type="checkbox" @bind="_inheritRole" disabled="@(_busy || !HasUserSelected)" />
+                            <label class="form-check-label">يرث صلاحيات الدور + صلاحيات إضافية</label>
+                        </div>
+                        @if (HasUserSelected && !_inheritRole)
+                        {
+                            <div class="small text-warning mt-1">تحذير: عند إلغاء الوراثة المستخدم سيملك فقط الصلاحيات المختارة هنا.</div>
+                        }
+                    </div>
+
+                    <div class="col-12 col-lg-3">
+                        <div class="d-flex gap-2 justify-content-lg-end">
+                            <button class="btn btn-outline-primary" @onclick="Reload" disabled="@_busy">تحديث</button>
+                            <button class="btn btn-primary" @onclick="Save" disabled="@(_busy || !HasUserSelected)">حفظ</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @if (HasUserSelected)
+        {
+            <div class="row g-3">
+                @foreach (var group in _catalog.GroupBy(x => x.Group).OrderBy(x => x.Key))
+                {
+                    <div class="col-12 col-lg-6">
+                        <div class="card">
+                            <div class="card-body">
+                                <div class="fw-bold mb-2">@group.Key</div>
+                                @foreach (var p in group.OrderBy(x => x.Name))
+                                {
+                                    <div class="form-check mb-1">
+                                        <input class="form-check-input" type="checkbox" checked="@_allowed.Contains(p.Key)" @onchange="(e) => Toggle(p.Key, e)" disabled="@_busy" />
+                                        <label class="form-check-label">
+                                            @p.Name
+                                            <span class="text-muted small">(@p.Key)</span>
+                                        </label>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="text-muted">اختر مستخدم لعرض/تعديل الصلاحيات.</div>
+        }
+    }
+</div>
+
+@code {
+    private bool _ready;
+    private bool _busy;
+    private string? _error;
+    private string? _success;
+
+    private List<UserItem> _users = [];
+    private List<PermissionItem> _catalog = [];
+
+    private string _selectedUserId = "";
+    private bool _inheritRole = true;
+    private HashSet<string> _allowed = new(StringComparer.OrdinalIgnoreCase);
+
+    private bool HasUserSelected => Guid.TryParse(_selectedUserId, out var id) && id != Guid.Empty;
+
+    private bool CanUse =>
+        Session.HasPermission(PermissionKeys.AdminPermissions) &&
+        (string.Equals(Session.Role, "Owner", StringComparison.OrdinalIgnoreCase) || string.Equals(Session.Role, "Manager", StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        await Session.EnsureLoadedAsync();
+        _ready = true;
+        StateHasChanged();
+
+        if (Session.IsLoggedIn && CanUse)
+        {
+            await Reload();
+        }
+    }
+
+    private async Task Reload()
+    {
+        _busy = true;
+        _error = null;
+        _success = null;
+        try
+        {
+            _catalog = await Api.GetAsync<List<PermissionItem>>("admin/permissions");
+            _users = await Api.GetAsync<List<UserItem>>("admin/users");
+
+            if (HasUserSelected)
+            {
+                await LoadUserPermissions();
+            }
+        }
+        catch (ApiUnauthorizedException ex)
+        {
+            if (ex.WasAuthenticated)
+            {
+                await Session.ClearAsync();
+            }
+            RedirectToLogin();
+        }
+        catch (ApiHttpException ex)
+        {
+            _error = string.IsNullOrWhiteSpace(ex.Body) ? ex.Message : ex.Body;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task OnUserChanged(ChangeEventArgs e)
+    {
+        _success = null;
+        _error = null;
+        _selectedUserId = e.Value?.ToString() ?? "";
+        _allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        _inheritRole = true;
+
+        if (!HasUserSelected)
+        {
+            return;
+        }
+
+        await LoadUserPermissions();
+    }
+
+    private async Task LoadUserPermissions()
+    {
+        if (!Guid.TryParse(_selectedUserId, out var userId) || userId == Guid.Empty)
+        {
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            var resp = await Api.GetAsync<UserPermissionsResponse>($"admin/user-permissions?userId={userId}");
+            _inheritRole = resp.InheritRole;
+            var keys = resp.AllowedKeys?.AsEnumerable() ?? Array.Empty<string>();
+            _allowed = new HashSet<string>(keys, StringComparer.OrdinalIgnoreCase);
+        }
+        catch (ApiUnauthorizedException ex)
+        {
+            if (ex.WasAuthenticated)
+            {
+                await Session.ClearAsync();
+            }
+            RedirectToLogin();
+        }
+        catch (ApiHttpException ex)
+        {
+            _error = string.IsNullOrWhiteSpace(ex.Body) ? ex.Message : ex.Body;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void Toggle(string key, ChangeEventArgs e)
+    {
+        var isChecked = e.Value is bool b && b;
+        if (isChecked)
+        {
+            _allowed.Add(key);
+        }
+        else
+        {
+            _allowed.Remove(key);
+        }
+    }
+
+    private async Task Save()
+    {
+        if (!Guid.TryParse(_selectedUserId, out var userId) || userId == Guid.Empty)
+        {
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        _success = null;
+        try
+        {
+            var response = await Api.PutAsync($"admin/user-permissions?userId={userId}", new
+            {
+                inheritRole = _inheritRole,
+                allowedKeys = _allowed.OrderBy(x => x).ToArray()
+            });
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = await response.Content.ReadAsStringAsync();
+                return;
+            }
+
+            _success = "تم حفظ صلاحيات المستخدم.";
+        }
+        catch (ApiUnauthorizedException ex)
+        {
+            if (ex.WasAuthenticated)
+            {
+                await Session.ClearAsync();
+            }
+            RedirectToLogin();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void RedirectToLogin()
+    {
+        var relative = Nav.ToBaseRelativePath(Nav.Uri);
+        var target = string.IsNullOrWhiteSpace(relative) ? "/login" : $"/login?return=/{Uri.EscapeDataString(relative)}";
+        Nav.NavigateTo(target);
+    }
+
+    private static string RoleLabel(int role)
+        => role switch
+        {
+            1 => "Cashier",
+            2 => "Manager",
+            3 => "Owner",
+            _ => role.ToString()
+        };
+
+    private sealed class UserItem
+    {
+        public Guid Id { get; set; }
+        public string Name { get; set; } = "";
+        public int Role { get; set; }
+        public bool IsActive { get; set; }
+        public DateTimeOffset CreatedAt { get; set; }
+    }
+
+    private sealed class PermissionItem
+    {
+        public string Key { get; set; } = "";
+        public string Group { get; set; } = "";
+        public string Name { get; set; } = "";
+    }
+
+    private sealed class UserPermissionsResponse
+    {
+        public Guid UserId { get; set; }
+        public bool InheritRole { get; set; }
+        public List<string>? AllowedKeys { get; set; }
+    }
+}

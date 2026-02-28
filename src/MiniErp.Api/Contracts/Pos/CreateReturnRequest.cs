@@ -10,8 +10,8 @@ public sealed record CreateReturnRequest(
 
 public sealed record ReturnItemRequest(
     Guid ProductId,
+    Guid? ProductUnitId,
     decimal Qty,
     decimal UnitPrice,
     decimal Discount
 );
-

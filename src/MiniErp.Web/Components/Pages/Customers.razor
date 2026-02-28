@@ -1,0 +1,320 @@
+@page "/customers"
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@inject ApiSession Session
+@inject ApiClient Api
+@inject NavigationManager Nav
+@using System.ComponentModel.DataAnnotations
+
+<PageTitle>@L["Customers.Title"]</PageTitle>
+
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="h3 m-0">@L["Customers.Title"]</h1>
+        <a class="btn btn-outline-secondary" href="/">@L["Common.Back"]</a>
+    </div>
+
+    @if (!_ready)
+    {
+        <div class="text-muted">@L["Common.Loading"]</div>
+    }
+    else if (!Session.IsLoggedIn)
+    {
+        <div class="alert alert-warning">@L["Auth.Required"]</div>
+        <a class="btn btn-primary" href="/login">@L["Auth.Login"]</a>
+    }
+    else
+    {
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <div class="alert alert-danger">@_error</div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(_success))
+        {
+            <div class="alert alert-success">@_success</div>
+        }
+
+        <div class="row g-3">
+            <div class="col-lg-7">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="d-flex gap-2 mb-2">
+                            <input class="form-control" placeholder="@L["Customers.Search"]" @bind="_search" @bind:event="oninput" />
+                            <button class="btn btn-outline-primary" @onclick="Load" disabled="@_busy">@L["Common.Refresh"]</button>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-sm table-striped align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>@L["Customers.Name"]</th>
+                                        <th>@L["Customers.Phone"]</th>
+                                        <th>@L["Common.Active"]</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var c in _customers)
+                                    {
+                                        <tr>
+                                            <td>@c.Name</td>
+                                            <td class="text-muted">@((string.IsNullOrWhiteSpace(c.Phone) ? "-" : c.Phone))</td>
+                                            <td>@(c.IsActive ? L["Common.Yes"] : L["Common.No"])</td>
+                                            <td class="text-end">
+                                                <button class="btn btn-sm btn-outline-secondary" @onclick="() => SelectForEdit(c)">@L["Common.Edit"]</button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-5">
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <div class="fw-bold mb-2">@L["Customers.Add"]</div>
+                        <EditForm Model="_create" OnValidSubmit="Create">
+                            <DataAnnotationsValidator />
+                            <div class="mb-2">
+                                <label class="form-label">@L["Customers.Name"]</label>
+                                <InputText class="form-control" @bind-Value="_create.Name" />
+                                <ValidationMessage For="@(() => _create.Name)" />
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label">@L["Customers.PhoneOptional"]</label>
+                                <InputText class="form-control" @bind-Value="_create.Phone" />
+                            </div>
+                            <div class="form-check mb-3">
+                                <InputCheckbox class="form-check-input" @bind-Value="_create.IsActive" />
+                                <label class="form-check-label">@L["Common.Active"]</label>
+                            </div>
+                            <button class="btn btn-primary w-100" type="submit" disabled="@_busy">@L["Common.Save"]</button>
+                        </EditForm>
+                    </div>
+                </div>
+
+                @if (_edit is not null)
+                {
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <div class="fw-bold">@L["Customers.Edit"]</div>
+                                <button class="btn btn-sm btn-outline-secondary" @onclick="ClearEdit" disabled="@_busy">@L["Common.Cancel"]</button>
+                            </div>
+                            <EditForm Model="_edit" OnValidSubmit="Update">
+                                <DataAnnotationsValidator />
+                                <div class="mb-2">
+                                    <label class="form-label">@L["Customers.Name"]</label>
+                                    <InputText class="form-control" @bind-Value="_edit.Name" />
+                                    <ValidationMessage For="@(() => _edit.Name)" />
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label">@L["Customers.PhoneOptional"]</label>
+                                    <InputText class="form-control" @bind-Value="_edit.Phone" />
+                                </div>
+                                <div class="form-check mb-3">
+                                    <InputCheckbox class="form-check-input" @bind-Value="_edit.IsActive" />
+                                    <label class="form-check-label">@L["Common.Active"]</label>
+                                </div>
+                                <button class="btn btn-success w-100" type="submit" disabled="@_busy">@L["Common.Save"]</button>
+                            </EditForm>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _ready;
+    private bool _busy;
+    private string? _error;
+    private string? _success;
+    private string _search = "";
+
+    private List<CustomerListItem> _customers = [];
+    private CreateCustomerModel _create = new();
+    private UpdateCustomerModel? _edit;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        await Session.EnsureLoadedAsync();
+        _ready = true;
+        if (Session.IsLoggedIn)
+        {
+            await Load();
+        }
+        StateHasChanged();
+    }
+
+    private async Task Load()
+    {
+        _error = null;
+        _success = null;
+        _busy = true;
+        try
+        {
+            var q = string.IsNullOrWhiteSpace(_search) ? "" : $"?search={Uri.EscapeDataString(_search.Trim())}";
+            _customers = await Api.GetAsync<List<CustomerListItem>>($"customers{q}");
+        }
+        catch (ApiUnauthorizedException ex)
+        {
+            if (ex.WasAuthenticated)
+            {
+                await Session.ClearAsync();
+            }
+            RedirectToLogin();
+        }
+        catch (ApiHttpException ex)
+        {
+            _error = string.IsNullOrWhiteSpace(ex.Body) ? ex.Message : ex.Body;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task Create()
+    {
+        _error = null;
+        _success = null;
+        _busy = true;
+        try
+        {
+            var response = await Api.PostAsync("customers", new
+            {
+                name = _create.Name.Trim(),
+                phone = string.IsNullOrWhiteSpace(_create.Phone) ? null : _create.Phone.Trim(),
+                isActive = _create.IsActive
+            });
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = await response.Content.ReadAsStringAsync();
+                return;
+            }
+
+            _create = new CreateCustomerModel();
+            _success = L["Common.Added"].Value;
+            await Load();
+        }
+        catch (ApiUnauthorizedException ex)
+        {
+            if (ex.WasAuthenticated)
+            {
+                await Session.ClearAsync();
+            }
+            RedirectToLogin();
+        }
+        catch (ApiHttpException ex)
+        {
+            _error = string.IsNullOrWhiteSpace(ex.Body) ? ex.Message : ex.Body;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void SelectForEdit(CustomerListItem item)
+    {
+        _edit = new UpdateCustomerModel
+        {
+            Id = item.Id,
+            Name = item.Name,
+            Phone = item.Phone,
+            IsActive = item.IsActive
+        };
+    }
+
+    private void ClearEdit() => _edit = null;
+
+    private async Task Update()
+    {
+        if (_edit is null)
+        {
+            return;
+        }
+
+        _error = null;
+        _success = null;
+        _busy = true;
+        try
+        {
+            var response = await Api.PutAsync($"customers/{_edit.Id}", new
+            {
+                name = _edit.Name.Trim(),
+                phone = string.IsNullOrWhiteSpace(_edit.Phone) ? null : _edit.Phone.Trim(),
+                isActive = _edit.IsActive
+            });
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = await response.Content.ReadAsStringAsync();
+                return;
+            }
+
+            _success = L["Common.Updated"].Value;
+            _edit = null;
+            await Load();
+        }
+        catch (ApiUnauthorizedException ex)
+        {
+            if (ex.WasAuthenticated)
+            {
+                await Session.ClearAsync();
+            }
+            RedirectToLogin();
+        }
+        catch (ApiHttpException ex)
+        {
+            _error = string.IsNullOrWhiteSpace(ex.Body) ? ex.Message : ex.Body;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void RedirectToLogin()
+    {
+        var relative = Nav.ToBaseRelativePath(Nav.Uri);
+        var target = string.IsNullOrWhiteSpace(relative) ? "/login" : $"/login?return=/{Uri.EscapeDataString(relative)}";
+        Nav.NavigateTo(target);
+    }
+
+    private sealed class CustomerListItem
+    {
+        public Guid Id { get; set; }
+        public string Name { get; set; } = "";
+        public string? Phone { get; set; }
+        public bool IsActive { get; set; }
+    }
+
+    private class CreateCustomerModel
+    {
+        [Required]
+        [MaxLength(300)]
+        public string Name { get; set; } = "";
+
+        [MaxLength(50)]
+        public string? Phone { get; set; }
+
+        public bool IsActive { get; set; } = true;
+    }
+
+    private sealed class UpdateCustomerModel : CreateCustomerModel
+    {
+        public Guid Id { get; set; }
+    }
+}

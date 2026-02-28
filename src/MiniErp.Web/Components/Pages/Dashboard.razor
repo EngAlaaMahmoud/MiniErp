@@ -2,20 +2,21 @@
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 @inject ApiSession Session
 @inject NavigationManager Nav
+@using MiniErp.Web.Security
 
-<PageTitle>لوحة التحكم</PageTitle>
+<PageTitle>@L["Dashboard.Title"]</PageTitle>
 
 <div class="container">
-    <h1 class="h3 mb-3">لوحة التحكم</h1>
+    <h1 class="h3 mb-3">@L["Dashboard.Title"]</h1>
 
     @if (!_ready)
     {
-        <div>...</div>
+        <div class="text-muted">@L["Common.Loading"]</div>
     }
     else if (!Session.IsLoggedIn)
     {
-        <div class="alert alert-warning">مطلوب تسجيل الدخول.</div>
-        <button class="btn btn-primary" @onclick="@(() => Nav.NavigateTo("/login"))">تسجيل الدخول</button>
+        <div class="alert alert-warning">@L["Auth.Required"]</div>
+        <button class="btn btn-primary" @onclick="@(() => Nav.NavigateTo("/login"))">@L["Auth.Login"]</button>
     }
     else
     {
@@ -23,11 +24,11 @@
             <div class="col-md-6">
                 <div class="card">
                     <div class="card-body">
-                        <div class="fw-bold mb-2">الحساب</div>
-                        <div>المستخدم: <code>@Session.UserName</code> (@Session.Role)</div>
-                        <div>Tenant: <code>@Session.TenantId</code></div>
-                        <div>Branch: <code>@Session.BranchId</code></div>
-                        <div>Device: <code>@Session.DeviceId</code></div>
+                        <div class="fw-bold mb-2">@L["Dashboard.Account"]</div>
+                        <div>@L["Dashboard.User"]: <code>@Session.UserName</code> (@Session.Role)</div>
+                        <div>@L["Dashboard.Tenant"]: <code>@Session.TenantId</code></div>
+                        <div>@L["Dashboard.Branch"]: <code>@Session.BranchId</code></div>
+                        <div>@L["Dashboard.Device"]: <code>@Session.DeviceId</code></div>
                     </div>
                 </div>
             </div>
@@ -35,13 +36,75 @@
             <div class="col-md-6">
                 <div class="card">
                     <div class="card-body">
-                        <div class="fw-bold mb-2">روابط سريعة</div>
+                        <div class="fw-bold mb-2">@L["Dashboard.QuickLinks"]</div>
                         <div class="d-flex gap-2 flex-wrap">
-                            <NavLink class="btn btn-outline-primary" href="/products">المنتجات</NavLink>
-                            <NavLink class="btn btn-outline-primary" href="/inventory">المخزون</NavLink>
-                            <NavLink class="btn btn-outline-success" href="/pos">فاتورة</NavLink>
-                            <NavLink class="btn btn-outline-danger" href="/returns">مرتجع</NavLink>
-                            <NavLink class="btn btn-outline-secondary" href="/logout">خروج</NavLink>
+                            @if (Session.HasPermission(PermissionKeys.SalesView) || Session.HasPermission(PermissionKeys.PurchasesView))
+                            {
+                                <NavLink class="btn btn-outline-dark" href="/invoices">@L["Nav.Invoices"]</NavLink>
+                            }
+
+                            @if (Session.HasPermission(PermissionKeys.CatalogView))
+                            {
+                                <NavLink class="btn btn-outline-primary" href="/products">@L["Nav.Products"]</NavLink>
+                                <NavLink class="btn btn-outline-primary" href="/categories">@L["Nav.Categories"]</NavLink>
+                            }
+
+                            @if (Session.HasPermission(PermissionKeys.InventoryView))
+                            {
+                                <NavLink class="btn btn-outline-primary" href="/inventory">@L["Nav.Inventory"]</NavLink>
+                            }
+
+                            @if (Session.HasPermission(PermissionKeys.TaxesView))
+                            {
+                                <NavLink class="btn btn-outline-primary" href="/taxes">@L["Nav.Taxes"]</NavLink>
+                            }
+
+                            @if (Session.HasPermission(PermissionKeys.CustomersView))
+                            {
+                                <NavLink class="btn btn-outline-primary" href="/customers">@L["Nav.Customers"]</NavLink>
+                            }
+
+                            @if (Session.HasPermission(PermissionKeys.SuppliersView))
+                            {
+                                <NavLink class="btn btn-outline-primary" href="/suppliers">@L["Nav.Suppliers"]</NavLink>
+                            }
+
+                            @if (Session.HasPermission(PermissionKeys.PurchasesView))
+                            {
+                                <NavLink class="btn btn-outline-primary" href="/purchases">@L["Nav.Purchases"]</NavLink>
+                            }
+
+                            @if (Session.HasPermission(PermissionKeys.SalesView))
+                            {
+                                <NavLink class="btn btn-outline-success" href="/pos">@L["Nav.Sales"]</NavLink>
+                            }
+
+                            @if (Session.HasPermission(PermissionKeys.ReturnsCreate))
+                            {
+                                <NavLink class="btn btn-outline-danger" href="/returns">@L["Nav.Returns"]</NavLink>
+                            }
+
+                            @if (Session.HasPermission(PermissionKeys.ReportsView))
+                            {
+                                <NavLink class="btn btn-outline-secondary" href="/reports">@L["Nav.Reports"]</NavLink>
+                            }
+
+                            @if (Session.HasPermission(PermissionKeys.AccountsView))
+                            {
+                                <NavLink class="btn btn-outline-secondary" href="/accounts">@L["Nav.Accounts"]</NavLink>
+                            }
+
+                            @if (Session.HasPermission(PermissionKeys.AdminUsers))
+                            {
+                                <NavLink class="btn btn-outline-secondary" href="/users">@L["Nav.Users"]</NavLink>
+                            }
+
+                            @if (Session.HasPermission(PermissionKeys.AdminPermissions))
+                            {
+                                <NavLink class="btn btn-outline-secondary" href="/permissions">@L["Nav.Permissions"]</NavLink>
+                            }
+
+                            <NavLink class="btn btn-outline-secondary" href="/logout">@L["Nav.Logout"]</NavLink>
                         </div>
                     </div>
                 </div>
@@ -65,4 +128,3 @@
         StateHasChanged();
     }
 }
-

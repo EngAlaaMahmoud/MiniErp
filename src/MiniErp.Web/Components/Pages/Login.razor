@@ -3,12 +3,16 @@
 @inject ApiClient Api
 @inject ApiSession Session
 @inject NavigationManager Nav
+@using Microsoft.AspNetCore.WebUtilities
+@using System.ComponentModel.DataAnnotations
 
-<PageTitle>تسجيل الدخول</PageTitle>
+<PageTitle>@L["Auth.Login"]</PageTitle>
 
-<div class="container" style="max-width: 520px;">
-    <h1 class="h3 mb-3">تسجيل الدخول</h1>
+<div class="container auth-page" style="max-width: 520px;">
+    <h1 class="h3 mb-3">@L["Auth.Login"]</h1>
 
+    <div class="card">
+        <div class="card-body">
     @if (!string.IsNullOrWhiteSpace(_error))
     {
         <div class="alert alert-danger">@_error</div>
@@ -34,7 +38,7 @@
         </div>
 
         <div class="mb-2">
-            <label class="form-label">اسم المستخدم</label>
+            <label class="form-label">@L["Auth.UserName"]</label>
             <InputText class="form-control" @bind-Value="_model.UserName" />
         </div>
 
@@ -43,8 +47,10 @@
             <InputText class="form-control" type="password" @bind-Value="_model.Pin" />
         </div>
 
-        <button class="btn btn-primary w-100" disabled="@_busy">دخول</button>
+        <button class="btn btn-primary w-100" disabled="@_busy">@L["Auth.Enter"]</button>
     </EditForm>
+        </div>
+    </div>
 
     <div class="mt-4 small text-muted">
         بيانات الديمو (Development):
@@ -79,7 +85,7 @@
         await Session.EnsureLoadedAsync();
         if (Session.IsLoggedIn)
         {
-            Nav.NavigateTo("/");
+            Nav.NavigateTo(GetReturnUrl() ?? "/");
         }
     }
 
@@ -127,12 +133,21 @@
             var parsed = System.Text.Json.JsonSerializer.Deserialize<PinLoginResponse>(result.JsonBody, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
             if (parsed is null || string.IsNullOrWhiteSpace(parsed.AccessToken))
             {
-                _error = "فشل تسجيل الدخول.";
+                _error = L["Auth.LoginFailed"].Value;
                 return;
             }
 
             await Session.SetAsync(tenantId, deviceId, branchId, parsed.AccessToken, parsed.UserName, MapRole(parsed.Role));
-            Nav.NavigateTo("/");
+            try
+            {
+                var keys = await Api.GetAsync<List<string>>("admin/my-permissions");
+                await Session.SetPermissionsAsync(keys);
+            }
+            catch
+            {
+                await Session.SetPermissionsAsync(Array.Empty<string>());
+            }
+            Nav.NavigateTo(GetReturnUrl() ?? "/");
         }
         finally
         {
@@ -151,10 +166,15 @@
 
     private sealed class LoginModel
     {
+        [Required]
         public string TenantId { get; set; } = "";
+        [Required]
         public string BranchId { get; set; } = "";
+        [Required]
         public string DeviceId { get; set; } = "";
+        [Required]
         public string UserName { get; set; } = "";
+        [Required]
         public string Pin { get; set; } = "";
     }
 
@@ -166,5 +186,17 @@
         public int Role { get; set; }
         public Guid TenantId { get; set; }
         public Guid DeviceId { get; set; }
+    }
+
+    private string? GetReturnUrl()
+    {
+        var uri = Nav.ToAbsoluteUri(Nav.Uri);
+        var query = QueryHelpers.ParseQuery(uri.Query);
+        if (query.TryGetValue("return", out var value) && !string.IsNullOrWhiteSpace(value))
+        {
+            return value.ToString();
+        }
+
+        return null;
     }
 }

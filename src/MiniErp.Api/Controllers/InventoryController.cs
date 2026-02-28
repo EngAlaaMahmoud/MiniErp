@@ -6,6 +6,8 @@ using MiniErp.Api.Contracts.Inventory;
 using MiniErp.Api.Data;
 using MiniErp.Api.Domain;
 using MiniErp.Api.Domain.Enums;
+using MiniErp.Api.Infrastructure.Inventory;
+using MiniErp.Api.Security;
 
 namespace MiniErp.Api.Controllers;
 
@@ -15,6 +17,7 @@ namespace MiniErp.Api.Controllers;
 public sealed class InventoryController(AppDbContext db) : ControllerBase
 {
     [HttpGet("balance")]
+    [RequirePermission(PermissionKeys.InventoryView)]
     public async Task<IActionResult> GetBalance([FromQuery] Guid branchId, CancellationToken ct)
     {
         if (branchId == Guid.Empty)
@@ -22,17 +25,21 @@ public sealed class InventoryController(AppDbContext db) : ControllerBase
             return BadRequest(new { error = "BRANCH_REQUIRED" });
         }
 
-        var items = await db.StockBalances
-            .Where(x => x.BranchId == branchId)
-            .Join(db.Products, sb => sb.ProductId, p => p.Id, (sb, p) => new StockBalanceItem(sb.ProductId, p.Name, sb.Qty))
-            .OrderBy(x => x.ProductName)
-            .Take(2000)
-            .ToListAsync(ct);
+        var items = await (
+            from sb in db.StockBalances.AsNoTracking()
+            join p in db.Products.AsNoTracking() on sb.ProductId equals p.Id
+            where sb.BranchId == branchId
+            orderby p.Name
+            select new StockBalanceItem(sb.ProductId, p.Name, sb.Qty)
+        )
+        .Take(2000)
+        .ToListAsync(ct);
 
         return Ok(items);
     }
 
     [HttpPost("adjustments")]
+    [RequirePermission(PermissionKeys.InventoryAdjust)]
     public async Task<IActionResult> CreateAdjustment([FromBody] CreateAdjustmentRequest request, CancellationToken ct)
     {
         var tenantId = db.TenantId;
@@ -145,30 +152,12 @@ public sealed class InventoryController(AppDbContext db) : ControllerBase
         IReadOnlyList<StockLedger> entries,
         CancellationToken ct)
     {
-        var productIds = entries.Select(x => x.ProductId).Distinct().ToArray();
-        var balances = await db.StockBalances
-            .Where(x => x.BranchId == branchId && productIds.Contains(x.ProductId))
-            .ToListAsync(ct);
+        var deltas = entries
+            .GroupBy(x => x.ProductId)
+            .Select(g => (ProductId: g.Key, QtyDelta: g.Sum(x => x.QtyDelta)))
+            .ToList();
 
-        var balanceByProduct = balances.ToDictionary(x => x.ProductId, x => x);
-
-        foreach (var entry in entries)
-        {
-            if (!balanceByProduct.TryGetValue(entry.ProductId, out var balance))
-            {
-                balance = new StockBalance
-                {
-                    TenantId = tenantId,
-                    BranchId = branchId,
-                    ProductId = entry.ProductId,
-                    Qty = 0
-                };
-                db.StockBalances.Add(balance);
-                balanceByProduct[entry.ProductId] = balance;
-            }
-
-            balance.Qty += entry.QtyDelta;
-        }
+        await StockBalanceWriter.ApplyDeltasAsync(db, tenantId, branchId, deltas, ct);
     }
 
     private static async Task<long> NextCounterAsync(AppDbContext db, Guid tenantId, string name, CancellationToken ct)
@@ -224,4 +213,3 @@ public sealed class InventoryController(AppDbContext db) : ControllerBase
         return updatedPostgres[0] - 1;
     }
 }
-

@@ -4,6 +4,6 @@ public enum StockLedgerReason
 {
     Sale = 1,
     Return = 2,
-    Adjustment = 3
+    Adjustment = 3,
+    Purchase = 4
 }
-

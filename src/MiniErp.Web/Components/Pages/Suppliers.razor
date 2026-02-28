@@ -1,0 +1,320 @@
+@page "/suppliers"
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@inject ApiSession Session
+@inject ApiClient Api
+@inject NavigationManager Nav
+@using System.ComponentModel.DataAnnotations
+
+<PageTitle>الموردين</PageTitle>
+
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="h3 m-0">الموردين</h1>
+        <a class="btn btn-outline-secondary" href="/">@L["Common.Back"]</a>
+    </div>
+
+    @if (!_ready)
+    {
+        <div class="text-muted">Loading...</div>
+    }
+    else if (!Session.IsLoggedIn)
+    {
+        <div class="alert alert-warning">مطلوب تسجيل الدخول.</div>
+        <a class="btn btn-primary" href="/login">تسجيل الدخول</a>
+    }
+    else
+    {
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <div class="alert alert-danger">@_error</div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(_success))
+        {
+            <div class="alert alert-success">@_success</div>
+        }
+
+        <div class="row g-3">
+            <div class="col-lg-7">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="d-flex gap-2 mb-2">
+                            <input class="form-control" placeholder="بحث بالاسم أو الهاتف..." @bind="_search" @bind:event="oninput" />
+                            <button class="btn btn-outline-primary" @onclick="Load" disabled="@_busy">تحديث</button>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-sm table-striped align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>الاسم</th>
+                                        <th>الهاتف</th>
+                                        <th>نشط</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var s in _suppliers)
+                                    {
+                                        <tr>
+                                            <td>@s.Name</td>
+                                            <td class="text-muted">@((string.IsNullOrWhiteSpace(s.Phone) ? "-" : s.Phone))</td>
+                                            <td>@(s.IsActive ? "نعم" : "لا")</td>
+                                            <td class="text-end">
+                                                <button class="btn btn-sm btn-outline-secondary" @onclick="() => SelectForEdit(s)">تعديل</button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-5">
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <div class="fw-bold mb-2">إضافة مورد</div>
+                        <EditForm Model="_create" OnValidSubmit="Create">
+                            <DataAnnotationsValidator />
+                            <div class="mb-2">
+                                <label class="form-label">الاسم</label>
+                                <InputText class="form-control" @bind-Value="_create.Name" />
+                                <ValidationMessage For="@(() => _create.Name)" />
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label">الهاتف (اختياري)</label>
+                                <InputText class="form-control" @bind-Value="_create.Phone" />
+                            </div>
+                            <div class="form-check mb-3">
+                                <InputCheckbox class="form-check-input" @bind-Value="_create.IsActive" />
+                                <label class="form-check-label">نشط</label>
+                            </div>
+                            <button class="btn btn-primary w-100" type="submit" disabled="@_busy">حفظ</button>
+                        </EditForm>
+                    </div>
+                </div>
+
+                @if (_edit is not null)
+                {
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <div class="fw-bold">تعديل مورد</div>
+                                <button class="btn btn-sm btn-outline-secondary" @onclick="ClearEdit" disabled="@_busy">إلغاء</button>
+                            </div>
+                            <EditForm Model="_edit" OnValidSubmit="Update">
+                                <DataAnnotationsValidator />
+                                <div class="mb-2">
+                                    <label class="form-label">الاسم</label>
+                                    <InputText class="form-control" @bind-Value="_edit.Name" />
+                                    <ValidationMessage For="@(() => _edit.Name)" />
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label">الهاتف (اختياري)</label>
+                                    <InputText class="form-control" @bind-Value="_edit.Phone" />
+                                </div>
+                                <div class="form-check mb-3">
+                                    <InputCheckbox class="form-check-input" @bind-Value="_edit.IsActive" />
+                                    <label class="form-check-label">نشط</label>
+                                </div>
+                                <button class="btn btn-success w-100" type="submit" disabled="@_busy">تحديث</button>
+                            </EditForm>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _ready;
+    private bool _busy;
+    private string? _error;
+    private string? _success;
+    private string _search = "";
+
+    private List<SupplierListItem> _suppliers = [];
+    private CreateSupplierModel _create = new();
+    private UpdateSupplierModel? _edit;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        await Session.EnsureLoadedAsync();
+        _ready = true;
+        if (Session.IsLoggedIn)
+        {
+            await Load();
+        }
+        StateHasChanged();
+    }
+
+    private async Task Load()
+    {
+        _error = null;
+        _success = null;
+        _busy = true;
+        try
+        {
+            var q = string.IsNullOrWhiteSpace(_search) ? "" : $"?search={Uri.EscapeDataString(_search.Trim())}";
+            _suppliers = await Api.GetAsync<List<SupplierListItem>>($"suppliers{q}");
+        }
+        catch (ApiUnauthorizedException ex)
+        {
+            if (ex.WasAuthenticated)
+            {
+                await Session.ClearAsync();
+            }
+            RedirectToLogin();
+        }
+        catch (ApiHttpException ex)
+        {
+            _error = string.IsNullOrWhiteSpace(ex.Body) ? ex.Message : ex.Body;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task Create()
+    {
+        _error = null;
+        _success = null;
+        _busy = true;
+        try
+        {
+            var response = await Api.PostAsync("suppliers", new
+            {
+                name = _create.Name.Trim(),
+                phone = string.IsNullOrWhiteSpace(_create.Phone) ? null : _create.Phone.Trim(),
+                isActive = _create.IsActive
+            });
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = await response.Content.ReadAsStringAsync();
+                return;
+            }
+
+            _create = new CreateSupplierModel();
+            _success = "تمت الإضافة.";
+            await Load();
+        }
+        catch (ApiUnauthorizedException ex)
+        {
+            if (ex.WasAuthenticated)
+            {
+                await Session.ClearAsync();
+            }
+            RedirectToLogin();
+        }
+        catch (ApiHttpException ex)
+        {
+            _error = string.IsNullOrWhiteSpace(ex.Body) ? ex.Message : ex.Body;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void SelectForEdit(SupplierListItem item)
+    {
+        _edit = new UpdateSupplierModel
+        {
+            Id = item.Id,
+            Name = item.Name,
+            Phone = item.Phone,
+            IsActive = item.IsActive
+        };
+    }
+
+    private void ClearEdit() => _edit = null;
+
+    private async Task Update()
+    {
+        if (_edit is null)
+        {
+            return;
+        }
+
+        _error = null;
+        _success = null;
+        _busy = true;
+        try
+        {
+            var response = await Api.PutAsync($"suppliers/{_edit.Id}", new
+            {
+                name = _edit.Name.Trim(),
+                phone = string.IsNullOrWhiteSpace(_edit.Phone) ? null : _edit.Phone.Trim(),
+                isActive = _edit.IsActive
+            });
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = await response.Content.ReadAsStringAsync();
+                return;
+            }
+
+            _success = "تم التحديث.";
+            _edit = null;
+            await Load();
+        }
+        catch (ApiUnauthorizedException ex)
+        {
+            if (ex.WasAuthenticated)
+            {
+                await Session.ClearAsync();
+            }
+            RedirectToLogin();
+        }
+        catch (ApiHttpException ex)
+        {
+            _error = string.IsNullOrWhiteSpace(ex.Body) ? ex.Message : ex.Body;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void RedirectToLogin()
+    {
+        var relative = Nav.ToBaseRelativePath(Nav.Uri);
+        var target = string.IsNullOrWhiteSpace(relative) ? "/login" : $"/login?return=/{Uri.EscapeDataString(relative)}";
+        Nav.NavigateTo(target);
+    }
+
+    private sealed class SupplierListItem
+    {
+        public Guid Id { get; set; }
+        public string Name { get; set; } = "";
+        public string? Phone { get; set; }
+        public bool IsActive { get; set; }
+    }
+
+    private class CreateSupplierModel
+    {
+        [Required]
+        [MaxLength(300)]
+        public string Name { get; set; } = "";
+
+        [MaxLength(50)]
+        public string? Phone { get; set; }
+
+        public bool IsActive { get; set; } = true;
+    }
+
+    private sealed class UpdateSupplierModel : CreateSupplierModel
+    {
+        public Guid Id { get; set; }
+    }
+}

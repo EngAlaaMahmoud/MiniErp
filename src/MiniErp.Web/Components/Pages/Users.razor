@@ -1,0 +1,441 @@
+@page "/users"
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@inject ApiSession Session
+@inject ApiClient Api
+@inject NavigationManager Nav
+@using System.ComponentModel.DataAnnotations
+@using MiniErp.Web.Security
+
+<PageTitle>المستخدمين</PageTitle>
+
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="h3 m-0">إدارة المستخدمين</h1>
+        <a class="btn btn-outline-secondary" href="/">@L["Common.Back"]</a>
+    </div>
+
+    @if (!_ready)
+    {
+        <div class="text-muted">Loading...</div>
+    }
+    else if (!Session.IsLoggedIn)
+    {
+        <div class="alert alert-warning">مطلوب تسجيل الدخول.</div>
+        <a class="btn btn-primary" href="/login">تسجيل الدخول</a>
+    }
+    else if (!Session.HasPermission(PermissionKeys.AdminUsers) && !string.Equals(Session.Role, "Owner", StringComparison.OrdinalIgnoreCase))
+    {
+        <div class="alert alert-danger">غير مصرح.</div>
+    }
+    else
+    {
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <div class="alert alert-danger">@_error</div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(_success))
+        {
+            <div class="alert alert-success">@_success</div>
+        }
+
+        <div class="row g-3">
+            <div class="col-lg-7">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <div class="fw-bold">المستخدمين</div>
+                            <button class="btn btn-sm btn-outline-primary" @onclick="Load" disabled="@_busy">تحديث</button>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-sm table-striped align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>الاسم</th>
+                                        <th>الدور</th>
+                                        <th>نشط</th>
+                                        <th class="text-muted">Created</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var u in _users)
+                                    {
+                                        <tr>
+                                            <td>@u.Name</td>
+                                            <td><code>@RoleLabel(u.Role)</code></td>
+                                            <td>@(u.IsActive ? "نعم" : "لا")</td>
+                                            <td class="text-muted">@u.CreatedAt.LocalDateTime.ToString("yyyy-MM-dd HH:mm")</td>
+                                            <td class="text-end">
+                                                <button class="btn btn-sm btn-outline-secondary" @onclick="() => SelectForEdit(u)">تعديل</button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-5">
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <div class="fw-bold mb-2">إضافة مستخدم</div>
+                        <EditForm Model="_create" OnValidSubmit="Create">
+                            <DataAnnotationsValidator />
+                            <ValidationSummary />
+
+                            <div class="mb-2">
+                                <label class="form-label">الاسم</label>
+                                <InputText class="form-control" @bind-Value="_create.Name" />
+                            </div>
+
+                            <div class="mb-2">
+                                <label class="form-label">PIN</label>
+                                <InputText class="form-control" type="password" @bind-Value="_create.Pin" />
+                            </div>
+
+                            <div class="row g-2 mb-2">
+                                <div class="col">
+                                    <label class="form-label">الدور</label>
+                                    <InputSelect class="form-select" @bind-Value="_create.Role">
+                                        @foreach (var role in _roles)
+                                        {
+                                            <option value="@role">@role</option>
+                                        }
+                                    </InputSelect>
+                                </div>
+                                <div class="col d-flex align-items-end">
+                                    <div class="form-check">
+                                        <InputCheckbox class="form-check-input" @bind-Value="_create.IsActive" />
+                                        <label class="form-check-label">نشط</label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button class="btn btn-primary w-100" disabled="@_busy">حفظ</button>
+                        </EditForm>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-body">
+                        <div class="fw-bold mb-2">تعديل مستخدم</div>
+
+                        @if (_edit is null)
+                        {
+                            <div class="text-muted">اختر مستخدم من القائمة.</div>
+                        }
+                        else
+                        {
+                            <EditForm Model="_edit" OnValidSubmit="SaveEdit">
+                                <DataAnnotationsValidator />
+                                <ValidationSummary />
+
+                                <div class="mb-2">
+                                    <label class="form-label">الاسم</label>
+                                    <InputText class="form-control" @bind-Value="_edit.Name" />
+                                </div>
+
+                                <div class="row g-2 mb-2">
+                                    <div class="col">
+                                        <label class="form-label">الدور</label>
+                                        <InputSelect class="form-select" @bind-Value="_edit.Role">
+                                            @foreach (var role in _roles)
+                                            {
+                                                <option value="@role">@role</option>
+                                            }
+                                        </InputSelect>
+                                    </div>
+                                    <div class="col d-flex align-items-end">
+                                        <div class="form-check">
+                                            <InputCheckbox class="form-check-input" @bind-Value="_edit.IsActive" />
+                                            <label class="form-check-label">نشط</label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="d-flex gap-2">
+                                    <button class="btn btn-primary flex-fill" disabled="@_busy">حفظ</button>
+                                    <button class="btn btn-outline-secondary" type="button" @onclick="ClearEdit" disabled="@_busy">إلغاء</button>
+                                </div>
+                            </EditForm>
+
+                            <hr />
+
+                            <div class="fw-bold mb-2">Reset PIN</div>
+                            <div class="d-flex gap-2">
+                                <input class="form-control" placeholder="PIN جديد" type="password" @bind="_resetPin" />
+                                <button class="btn btn-outline-danger" @onclick="ResetPin" disabled="@_busy">Reset</button>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private readonly string[] _roles = ["Cashier", "Manager", "Owner"];
+
+    private bool _ready;
+    private bool _busy;
+    private string? _error;
+    private string? _success;
+
+    private List<UserItem> _users = [];
+    private CreateUserModel _create = new();
+    private EditUserModel? _edit;
+    private string? _resetPin;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        await Session.EnsureLoadedAsync();
+        _ready = true;
+        StateHasChanged();
+
+        if (Session.IsLoggedIn && (Session.HasPermission(PermissionKeys.AdminUsers) || string.Equals(Session.Role, "Owner", StringComparison.OrdinalIgnoreCase)))
+        {
+            await Load();
+        }
+    }
+
+    private async Task Load()
+    {
+        _busy = true;
+        _error = null;
+        _success = null;
+        try
+        {
+            _users = await Api.GetAsync<List<UserItem>>("admin/users");
+        }
+        catch (ApiUnauthorizedException ex)
+        {
+            if (ex.WasAuthenticated)
+            {
+                await Session.ClearAsync();
+            }
+            RedirectToLogin();
+        }
+        catch (ApiHttpException ex)
+        {
+            _error = string.IsNullOrWhiteSpace(ex.Body) ? ex.Message : ex.Body;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task Create()
+    {
+        _busy = true;
+        _error = null;
+        _success = null;
+        try
+        {
+            var response = await Api.PostAsync("admin/users", new
+            {
+                name = _create.Name.Trim(),
+                pin = _create.Pin.Trim(),
+                role = MapRole(_create.Role),
+                isActive = _create.IsActive
+            });
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = await response.Content.ReadAsStringAsync();
+                return;
+            }
+
+            _create = new CreateUserModel();
+            _success = "تم إنشاء المستخدم.";
+            await Load();
+        }
+        catch (ApiUnauthorizedException ex)
+        {
+            if (ex.WasAuthenticated)
+            {
+                await Session.ClearAsync();
+            }
+            RedirectToLogin();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void SelectForEdit(UserItem user)
+    {
+        _edit = new EditUserModel
+        {
+            Id = user.Id,
+            Name = user.Name,
+            Role = RoleLabel(user.Role),
+            IsActive = user.IsActive
+        };
+        _resetPin = null;
+        _success = null;
+        _error = null;
+    }
+
+    private void ClearEdit()
+    {
+        _edit = null;
+        _resetPin = null;
+    }
+
+    private async Task SaveEdit()
+    {
+        if (_edit is null)
+        {
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        _success = null;
+        try
+        {
+            var response = await Api.PutAsync($"admin/users/{_edit.Id}", new
+            {
+                name = _edit.Name.Trim(),
+                role = MapRole(_edit.Role),
+                isActive = _edit.IsActive
+            });
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = await response.Content.ReadAsStringAsync();
+                return;
+            }
+
+            _success = "تم حفظ التعديلات.";
+            await Load();
+        }
+        catch (ApiUnauthorizedException ex)
+        {
+            if (ex.WasAuthenticated)
+            {
+                await Session.ClearAsync();
+            }
+            RedirectToLogin();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ResetPin()
+    {
+        if (_edit is null)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_resetPin))
+        {
+            _error = "PIN مطلوب.";
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        _success = null;
+        try
+        {
+            var response = await Api.PostAsync($"admin/users/{_edit.Id}/reset-pin", new
+            {
+                pin = _resetPin.Trim()
+            });
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = await response.Content.ReadAsStringAsync();
+                return;
+            }
+
+            _resetPin = null;
+            _success = "تم تحديث PIN.";
+        }
+        catch (ApiUnauthorizedException ex)
+        {
+            if (ex.WasAuthenticated)
+            {
+                await Session.ClearAsync();
+            }
+            RedirectToLogin();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static int MapRole(string role)
+        => role switch
+        {
+            "Cashier" => 1,
+            "Manager" => 2,
+            "Owner" => 3,
+            _ => 1
+        };
+
+    private void RedirectToLogin()
+    {
+        var relative = Nav.ToBaseRelativePath(Nav.Uri);
+        var target = string.IsNullOrWhiteSpace(relative) ? "/login" : $"/login?return=/{Uri.EscapeDataString(relative)}";
+        Nav.NavigateTo(target);
+    }
+
+    private sealed class UserItem
+    {
+        public Guid Id { get; set; }
+        public string Name { get; set; } = "";
+        public int Role { get; set; } = 1;
+        public bool IsActive { get; set; }
+        public DateTimeOffset CreatedAt { get; set; }
+    }
+
+    private sealed class CreateUserModel
+    {
+        [Required]
+        public string Name { get; set; } = "";
+
+        [Required]
+        public string Pin { get; set; } = "";
+
+        public string Role { get; set; } = "Cashier";
+        public bool IsActive { get; set; } = true;
+    }
+
+    private sealed class EditUserModel
+    {
+        public Guid Id { get; set; }
+
+        [Required]
+        public string Name { get; set; } = "";
+
+        public string Role { get; set; } = "Cashier";
+        public bool IsActive { get; set; } = true;
+    }
+
+    private static string RoleLabel(int role)
+        => role switch
+        {
+            1 => "Cashier",
+            2 => "Manager",
+            3 => "Owner",
+            _ => "Cashier"
+        };
+}

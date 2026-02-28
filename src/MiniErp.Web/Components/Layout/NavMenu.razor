@@ -1,6 +1,12 @@
 @inject ApiSession Session
+@inject ApiClient Api
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@implements IDisposable
+@using MiniErp.Web.Security
+@using Microsoft.JSInterop
 
-<div class="top-row ps-3 navbar navbar-dark">
+<div class="top-row ps-3 navbar">
     <div class="container-fluid">
         <a class="navbar-brand" href="">Mini ERP</a>
     </div>
@@ -11,39 +17,142 @@
 <div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
     <nav class="flex-column">
         <div class="nav-item px-3">
-            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">لوحة التحكم</NavLink>
+            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">@L["Nav.Dashboard"]</NavLink>
         </div>
 
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="products">المنتجات</NavLink>
-        </div>
+        @if (Session.IsLoggedIn && (Session.HasPermission(PermissionKeys.SalesView) || Session.HasPermission(PermissionKeys.PurchasesView)))
+        {
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="invoices">@L["Nav.Invoices"]</NavLink>
+            </div>
+        }
 
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="inventory">المخزون</NavLink>
-        </div>
+        @if (Session.IsLoggedIn && Session.HasPermission(PermissionKeys.CatalogView))
+        {
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="products">@L["Nav.Products"]</NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="categories">@L["Nav.Categories"]</NavLink>
+            </div>
+        }
 
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="pos">فاتورة</NavLink>
-        </div>
+        @if (Session.IsLoggedIn && Session.HasPermission(PermissionKeys.InventoryView))
+        {
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="inventory">@L["Nav.Inventory"]</NavLink>
+            </div>
+        }
 
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="returns">مرتجع</NavLink>
+        @if (Session.IsLoggedIn && Session.HasPermission(PermissionKeys.TaxesView))
+        {
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="taxes">@L["Nav.Taxes"]</NavLink>
+            </div>
+        }
+
+        @if (Session.IsLoggedIn && Session.HasPermission(PermissionKeys.CustomersView))
+        {
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="customers">@L["Nav.Customers"]</NavLink>
+            </div>
+        }
+
+        @if (Session.IsLoggedIn && Session.HasPermission(PermissionKeys.SuppliersView))
+        {
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="suppliers">@L["Nav.Suppliers"]</NavLink>
+            </div>
+        }
+
+        @if (Session.IsLoggedIn && Session.HasPermission(PermissionKeys.PurchasesView))
+        {
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="purchases">@L["Nav.Purchases"]</NavLink>
+            </div>
+        }
+
+        @if (Session.IsLoggedIn && Session.HasPermission(PermissionKeys.SalesView))
+        {
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="pos">@L["Nav.Sales"]</NavLink>
+            </div>
+        }
+
+        @if (Session.IsLoggedIn && Session.HasPermission(PermissionKeys.ReturnsCreate))
+        {
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="returns">@L["Nav.Returns"]</NavLink>
+            </div>
+        }
+
+        @if (Session.IsLoggedIn && Session.HasPermission(PermissionKeys.ReportsView))
+        {
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="reports">@L["Nav.Reports"]</NavLink>
+            </div>
+        }
+
+        @if (Session.IsLoggedIn && Session.HasPermission(PermissionKeys.AccountsView))
+        {
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="accounts">@L["Nav.Accounts"]</NavLink>
+            </div>
+        }
+
+        @if (Session.IsLoggedIn && Session.HasPermission(PermissionKeys.AdminUsers))
+        {
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="users">@L["Nav.Users"]</NavLink>
+            </div>
+        }
+
+        @if (Session.IsLoggedIn && Session.HasPermission(PermissionKeys.AdminPermissions))
+        {
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="permissions">@L["Nav.Permissions"]</NavLink>
+            </div>
+        }
+
+        <div class="nav-item px-3 mt-2" @onclick:stopPropagation="true">
+            <div class="small text-muted mb-1">@L["Ui.Settings"]</div>
+            <div class="d-flex flex-column gap-2">
+                <label class="small text-muted">@L["Ui.Language"]</label>
+                <select class="form-select form-select-sm" value="@_culture" @onchange="OnCultureChanged" aria-label="@L["Ui.Language"]">
+                    <option value="ar">@L["Ui.Language.Arabic"]</option>
+                    <option value="en">@L["Ui.Language.English"]</option>
+                </select>
+                <label class="small text-muted">@L["Ui.Theme"]</label>
+                <select class="form-select form-select-sm" value="@_theme" @onchange="OnThemeChanged" aria-label="@L["Ui.Theme"]">
+                    <option value="light">@L["Ui.Light"]</option>
+                    <option value="dark">@L["Ui.Dark"]</option>
+                    <option value="ocean">@L["Ui.Ocean"]</option>
+                </select>
+            </div>
         </div>
 
         <div class="nav-item px-3">
             @if (!Session.IsLoggedIn)
             {
-                <NavLink class="nav-link" href="login">تسجيل الدخول</NavLink>
+                <NavLink class="nav-link" href="login">@L["Nav.Login"]</NavLink>
             }
             else
             {
-                <NavLink class="nav-link" href="logout">خروج</NavLink>
+                <NavLink class="nav-link" href="logout">@L["Nav.Logout"]</NavLink>
             }
         </div>
     </nav>
 </div>
 
 @code {
+    private string _culture = "ar";
+    private string _theme = "light";
+
+    protected override void OnInitialized()
+    {
+        Session.Changed += OnSessionChanged;
+    }
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender)
@@ -51,8 +160,65 @@
             return;
         }
 
+        _culture = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
+        try
+        {
+            _theme = await JS.InvokeAsync<string>("miniErpUi.getTheme");
+        }
+        catch
+        {
+            _theme = "light";
+        }
+
         await Session.EnsureLoadedAsync();
+
+        if (Session.IsLoggedIn && Session.PermissionKeys.Count == 0)
+        {
+            try
+            {
+                var keys = await Api.GetAsync<List<string>>("admin/my-permissions");
+                await Session.SetPermissionsAsync(keys);
+            }
+            catch
+            {
+                // ignore
+            }
+        }
+
         StateHasChanged();
     }
-}
 
+    private void OnCultureChanged(ChangeEventArgs e)
+    {
+        var culture = (e.Value?.ToString() ?? "").Trim().ToLowerInvariant();
+        if (culture != "ar" && culture != "en")
+        {
+            return;
+        }
+
+        var relative = Nav.ToBaseRelativePath(Nav.Uri);
+        var target = string.IsNullOrWhiteSpace(relative) ? "/" : $"/{relative}";
+        Nav.NavigateTo($"/ui/culture/{culture}?redirect={Uri.EscapeDataString(target)}", forceLoad: true);
+    }
+
+    private async Task OnThemeChanged(ChangeEventArgs e)
+    {
+        var theme = (e.Value?.ToString() ?? "").Trim().ToLowerInvariant();
+        _theme = theme;
+        try
+        {
+            await JS.InvokeVoidAsync("miniErpUi.setTheme", theme);
+        }
+        catch
+        {
+            // ignore
+        }
+    }
+
+    private void OnSessionChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Session.Changed -= OnSessionChanged;
+    }
+}

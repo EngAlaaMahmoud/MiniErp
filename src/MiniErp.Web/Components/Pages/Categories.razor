@@ -1,0 +1,188 @@
+@page "/categories"
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@inject ApiSession Session
+@inject ApiClient Api
+@inject NavigationManager Nav
+@using System.ComponentModel.DataAnnotations
+
+<PageTitle>Categories</PageTitle>
+
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="h3 m-0">Categories</h1>
+        <a class="btn btn-outline-secondary" href="/">Dashboard</a>
+    </div>
+
+    @if (!Session.IsLoggedIn)
+    {
+        <div class="alert alert-warning">Login required.</div>
+        <a class="btn btn-primary" href="/login">Login</a>
+    }
+    else
+    {
+        <div class="row g-3">
+            <div class="col-lg-7">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="d-flex gap-2 mb-2">
+                            <button class="btn btn-outline-primary" @onclick="Load" disabled="@_busy">Refresh</button>
+                        </div>
+
+                        @if (!string.IsNullOrWhiteSpace(_error))
+                        {
+                            <div class="alert alert-danger">@_error</div>
+                        }
+
+                        <div class="table-responsive">
+                            <table class="table table-sm table-striped align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Active</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var c in _items)
+                                    {
+                                        <tr>
+                                            <td>@c.Name</td>
+                                            <td>@(c.IsActive ? "Yes" : "No")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-5">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="fw-bold mb-2">Add Category</div>
+                        <EditForm Model="_create" OnValidSubmit="Create">
+                            <DataAnnotationsValidator />
+                            <ValidationSummary />
+
+                            <div class="mb-2">
+                                <label class="form-label">Name</label>
+                                <InputText class="form-control" @bind-Value="_create.Name" />
+                            </div>
+                            <div class="form-check mb-3">
+                                <InputCheckbox class="form-check-input" @bind-Value="_create.IsActive" />
+                                <label class="form-check-label">Active</label>
+                            </div>
+
+                            <button class="btn btn-primary w-100" disabled="@_busy">Save</button>
+                        </EditForm>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _busy;
+    private string? _error;
+    private List<CategoryItem> _items = [];
+    private CreateCategoryModel _create = new() { IsActive = true };
+    private bool _initialLoadDone;
+
+    protected override Task OnInitializedAsync() => Task.CompletedTask;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _initialLoadDone)
+        {
+            return;
+        }
+
+        _initialLoadDone = true;
+        await Session.EnsureLoadedAsync();
+        if (Session.IsLoggedIn)
+        {
+            await Load();
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task Load()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            _items = await Api.GetAsync<List<CategoryItem>>("catalog/categories");
+        }
+        catch (ApiUnauthorizedException ex)
+        {
+            if (ex.WasAuthenticated)
+            {
+                await Session.ClearAsync();
+            }
+            RedirectToLogin();
+        }
+        catch (ApiHttpException ex)
+        {
+            _error = string.IsNullOrWhiteSpace(ex.Body) ? ex.Message : ex.Body;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task Create()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var response = await Api.PostAsync("catalog/categories", new
+            {
+                name = _create.Name,
+                isActive = _create.IsActive
+            });
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = await response.Content.ReadAsStringAsync();
+                return;
+            }
+
+            _create = new CreateCategoryModel { IsActive = true };
+            await Load();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private sealed class CategoryItem
+    {
+        public Guid Id { get; set; }
+        public string Name { get; set; } = "";
+        public bool IsActive { get; set; }
+    }
+
+    private sealed class CreateCategoryModel
+    {
+        [Required] public string Name { get; set; } = "";
+        public bool IsActive { get; set; }
+    }
+
+    private void RedirectToLogin()
+    {
+        var relative = Nav.ToBaseRelativePath(Nav.Uri);
+        var target = string.IsNullOrWhiteSpace(relative) ? "/login" : $"/login?return=/{Uri.EscapeDataString(relative)}";
+        Nav.NavigateTo(target);
+    }
+}
+

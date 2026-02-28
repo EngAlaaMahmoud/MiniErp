@@ -1,5 +1,5 @@
 ﻿<!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="@System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName" dir="@(string.Equals(System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName, "ar", StringComparison.OrdinalIgnoreCase) ? "rtl" : "ltr")" data-theme="light">
 
 <head>
     <meta charset="utf-8" />
@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="app.css" />
     <link rel="stylesheet" href="MiniErp.Web.styles.css" />
     <link rel="icon" type="image/png" href="favicon.png" />
+    <script src="ui.js"></script>
     <HeadOutlet />
 </head>
 

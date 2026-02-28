@@ -8,6 +8,10 @@ public sealed class Product : ITenantScoped
     public string? Sku { get; set; }
     public decimal Cost { get; set; }
     public decimal Price { get; set; }
+
+    public Guid? CategoryId { get; set; }
+    public Guid? TaxRateId { get; set; }
+    public Guid? SalesTaxTypeId { get; set; }
+    public decimal ReorderLevel { get; set; }
     public bool IsActive { get; set; } = true;
 }
-

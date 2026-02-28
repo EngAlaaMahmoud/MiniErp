@@ -1,0 +1,537 @@
+@page "/taxes"
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@inject ApiSession Session
+@inject ApiClient Api
+@inject NavigationManager Nav
+@using System.ComponentModel.DataAnnotations
+
+<PageTitle>@L["Nav.Taxes"]</PageTitle>
+
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="h3 m-0">@L["Nav.Taxes"]</h1>
+        <a class="btn btn-outline-secondary" href="/">@L["Common.Back"]</a>
+    </div>
+
+    @if (!Session.IsLoggedIn)
+    {
+        <div class="alert alert-warning">@L["Auth.Required"]</div>
+        <a class="btn btn-primary" href="/login">@L["Auth.Login"]</a>
+    }
+    else
+    {
+        <ul class="nav nav-tabs mb-3">
+            <li class="nav-item">
+                <button type="button" class="nav-link @(_tab == TaxesTab.Types ? "active" : "")" @onclick="() => SwitchTab(TaxesTab.Types)">@L["Taxes.Tab.Codes"]</button>
+            </li>
+            <li class="nav-item">
+                <button type="button" class="nav-link @(_tab == TaxesTab.Rates ? "active" : "")" @onclick="() => SwitchTab(TaxesTab.Rates)">@L["Taxes.Tab.Rates"]</button>
+            </li>
+            <li class="nav-item">
+                <button type="button" class="nav-link @(_tab == TaxesTab.Report ? "active" : "")" @onclick="() => SwitchTab(TaxesTab.Report)">@L["Taxes.Tab.Report"]</button>
+            </li>
+        </ul>
+
+        @if (_tab == TaxesTab.Types)
+        {
+        <div class="row g-3">
+            <div class="col-lg-7">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="d-flex gap-2 mb-2">
+                            <input class="form-control" placeholder="@L["Taxes.SearchCodesPlaceholder"]" @bind="_search" @bind:event="oninput" />
+                            <button class="btn btn-outline-primary" @onclick="Load" disabled="@_busy">@L["Common.Refresh"]</button>
+                        </div>
+
+                        @if (!string.IsNullOrWhiteSpace(_error))
+                        {
+                            <div class="alert alert-danger">@_error</div>
+                        }
+
+                        <div class="table-responsive">
+                            <table class="table table-sm table-striped align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>Main</th>
+                                        <th>Sub</th>
+                                        <th>Type</th>
+                                        <th>@L["Common.Description"]</th>
+                                        <th>@L["Common.Active"]</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var t in _items)
+                                    {
+                                        <tr>
+                                            <td><code>@t.MainCode</code></td>
+                                            <td><code>@t.SubCode</code></td>
+                                            <td class="text-muted">@t.TaxType</td>
+                                            <td>@t.Description</td>
+                                            <td>@(t.IsActive ? L["Common.Yes"] : L["Common.No"])</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-5">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="fw-bold mb-2">@L["Taxes.AddTaxType"]</div>
+                        <EditForm Model="_create" OnValidSubmit="Create">
+                            <DataAnnotationsValidator />
+                            <ValidationSummary />
+
+                            <div class="row g-2">
+                                <div class="col">
+                                    <label class="form-label">MainCode</label>
+                                    <InputText class="form-control" @bind-Value="_create.MainCode" />
+                                </div>
+                                <div class="col">
+                                    <label class="form-label">SubCode</label>
+                                    <InputText class="form-control" @bind-Value="_create.SubCode" />
+                                </div>
+                            </div>
+
+                            <div class="mb-2 mt-2">
+                                <label class="form-label">Type</label>
+                                <InputText class="form-control" @bind-Value="_create.TaxType" />
+                            </div>
+
+                            <div class="mb-2">
+                                <label class="form-label">البيان</label>
+                                <InputText class="form-control" @bind-Value="_create.Description" />
+                            </div>
+
+                            <div class="form-check mb-3">
+                                <InputCheckbox class="form-check-input" @bind-Value="_create.IsActive" />
+                                <label class="form-check-label">نشط</label>
+                            </div>
+
+                            <button class="btn btn-primary w-100" disabled="@_busy">حفظ</button>
+                        </EditForm>
+
+                        <div class="small text-muted mt-3">
+                            مثال من ملف الإكسيل: <code>T_1</code> + <code>V009</code> (VAT) / <code>T_4</code> + <code>W013</code> (WHT)
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        }
+        else if (_tab == TaxesTab.Rates)
+        {
+            <div class="row g-3">
+                <div class="col-lg-7">
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="d-flex gap-2 mb-2">
+                                <input class="form-control" placeholder="Search (VAT 14% ...)" @bind="_ratesSearch" @bind:event="oninput" />
+                                <button class="btn btn-outline-primary" @onclick="LoadRates" disabled="@_busy">@L["Common.Refresh"]</button>
+                            </div>
+
+                            @if (!string.IsNullOrWhiteSpace(_error))
+                            {
+                                <div class="alert alert-danger">@_error</div>
+                            }
+
+                            <div class="table-responsive">
+                                <table class="table table-sm table-striped align-middle">
+                                    <thead>
+                                        <tr>
+                                            <th>Name</th>
+                                            <th class="text-end">Percent</th>
+                                            <th>Active</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var r in _rates)
+                                        {
+                                            <tr>
+                                                <td>@r.Name</td>
+                                                <td class="text-end">@((r.Percent * 100).ToString("0.######"))%</td>
+                                                <td>@(r.IsActive ? L["Common.Yes"] : L["Common.No"])</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-5">
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="fw-bold mb-2">Add Tax Rate</div>
+                            <EditForm Model="_createRate" OnValidSubmit="CreateRate">
+                                <DataAnnotationsValidator />
+                                <ValidationSummary />
+
+                                <div class="mb-2">
+                                    <label class="form-label">Name</label>
+                                    <InputText class="form-control" @bind-Value="_createRate.Name" />
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label">Percent (0 - 100)</label>
+                                    <InputNumber class="form-control" @bind-Value="_createRate.Percent" />
+                                </div>
+                                <div class="form-check mb-3">
+                                    <InputCheckbox class="form-check-input" @bind-Value="_createRate.IsActive" />
+                                    <label class="form-check-label">Active</label>
+                                </div>
+
+                                <button class="btn btn-primary w-100" disabled="@_busy">Save</button>
+                            </EditForm>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="card">
+                <div class="card-body">
+                    <div class="fw-bold mb-3">Tax Report</div>
+
+                    @if (!string.IsNullOrWhiteSpace(_error))
+                    {
+                        <div class="alert alert-danger">@_error</div>
+                    }
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label">From</label>
+                            <InputDate class="form-control" @bind-Value="_reportFrom" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">To</label>
+                            <InputDate class="form-control" @bind-Value="_reportTo" />
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end gap-2">
+                            <button class="btn btn-outline-primary" @onclick="LoadReport" disabled="@_busy">Load</button>
+                            <div class="form-check">
+                                <InputCheckbox class="form-check-input" @bind-Value="_reportBranchOnly" />
+                                <label class="form-check-label">Current branch only</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    @if (_report is not null)
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <tbody>
+                                    <tr>
+                                        <th>Sales Tax</th>
+                                        <td class="text-end">@_report.SalesTax</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Purchase Tax</th>
+                                        <td class="text-end">@_report.PurchaseTax</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Net (Sales - Purchase)</th>
+                                        <td class="text-end fw-bold">@_report.NetTax</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private enum TaxesTab
+    {
+        Types,
+        Rates,
+        Report
+    }
+
+    private TaxesTab _tab = TaxesTab.Types;
+    private bool _busy;
+    private string? _error;
+    private string _search = "";
+    private List<TaxTypeItem> _items = [];
+    private CreateTaxTypeModel _create = new() { IsActive = true, TaxType = "VAT" };
+
+    private string _ratesSearch = "";
+    private List<TaxRateItem> _rates = [];
+    private CreateTaxRateModel _createRate = new() { IsActive = true, Percent = 14 };
+
+    private DateTime _reportFrom = DateTime.Today.AddDays(-30);
+    private DateTime _reportTo = DateTime.Today;
+    private bool _reportBranchOnly = true;
+    private TaxReportItem? _report;
+    private bool _initialLoadDone;
+
+    protected override Task OnInitializedAsync() => Task.CompletedTask;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _initialLoadDone)
+        {
+            return;
+        }
+
+        _initialLoadDone = true;
+        await Session.EnsureLoadedAsync();
+        if (Session.IsLoggedIn)
+        {
+            await Load();
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task SwitchTab(TaxesTab tab)
+    {
+        if (_tab == tab)
+        {
+            return;
+        }
+
+        _tab = tab;
+        _error = null;
+        _report = null;
+
+        if (!Session.IsLoggedIn)
+        {
+            return;
+        }
+
+        if (_tab == TaxesTab.Types)
+        {
+            await Load();
+            return;
+        }
+
+        if (_tab == TaxesTab.Rates)
+        {
+            await LoadRates();
+            return;
+        }
+
+        await LoadReport();
+    }
+
+    private async Task Load()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var q = string.IsNullOrWhiteSpace(_search) ? "" : $"?search={Uri.EscapeDataString(_search)}";
+            _items = await Api.GetAsync<List<TaxTypeItem>>($"taxes/types{q}");
+        }
+        catch (ApiUnauthorizedException ex)
+        {
+            if (ex.WasAuthenticated)
+            {
+                await Session.ClearAsync();
+            }
+            RedirectToLogin();
+        }
+        catch (ApiHttpException ex)
+        {
+            _error = string.IsNullOrWhiteSpace(ex.Body) ? ex.Message : ex.Body;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task Create()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var response = await Api.PostAsync("taxes/types", new
+            {
+                mainCode = _create.MainCode,
+                subCode = _create.SubCode,
+                taxType = _create.TaxType,
+                description = _create.Description,
+                isActive = _create.IsActive
+            });
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = await response.Content.ReadAsStringAsync();
+                return;
+            }
+
+            _create = new CreateTaxTypeModel { IsActive = true, TaxType = _create.TaxType };
+            await Load();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task LoadRates()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var q = string.IsNullOrWhiteSpace(_ratesSearch) ? "" : $"?search={Uri.EscapeDataString(_ratesSearch)}";
+            _rates = await Api.GetAsync<List<TaxRateItem>>($"taxes/rates{q}");
+        }
+        catch (ApiUnauthorizedException ex)
+        {
+            if (ex.WasAuthenticated)
+            {
+                await Session.ClearAsync();
+            }
+            RedirectToLogin();
+        }
+        catch (ApiHttpException ex)
+        {
+            _error = string.IsNullOrWhiteSpace(ex.Body) ? ex.Message : ex.Body;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task CreateRate()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var percent = _createRate.Percent / 100m;
+            var response = await Api.PostAsync("taxes/rates", new
+            {
+                name = _createRate.Name,
+                percent,
+                isActive = _createRate.IsActive
+            });
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = await response.Content.ReadAsStringAsync();
+                return;
+            }
+
+            _createRate = new CreateTaxRateModel { IsActive = true, Percent = _createRate.Percent };
+            await LoadRates();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task LoadReport()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var from = new DateTimeOffset(_reportFrom.Date);
+            var to = new DateTimeOffset(_reportTo.Date.AddDays(1));
+
+            var branch = _reportBranchOnly ? Session.BranchId : (Guid?)null;
+
+            var qs = $"?from={Uri.EscapeDataString(from.ToString("o"))}&to={Uri.EscapeDataString(to.ToString("o"))}";
+            if (branch is not null && branch.Value != Guid.Empty)
+            {
+                qs += $"&branchId={Uri.EscapeDataString(branch.Value.ToString())}";
+            }
+
+            _report = await Api.GetAsync<TaxReportItem>($"taxes/report{qs}");
+        }
+        catch (ApiUnauthorizedException ex)
+        {
+            if (ex.WasAuthenticated)
+            {
+                await Session.ClearAsync();
+            }
+            RedirectToLogin();
+        }
+        catch (ApiHttpException ex)
+        {
+            _error = string.IsNullOrWhiteSpace(ex.Body) ? ex.Message : ex.Body;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private sealed class TaxTypeItem
+    {
+        public Guid Id { get; set; }
+        public string MainCode { get; set; } = "";
+        public string SubCode { get; set; } = "";
+        public string TaxType { get; set; } = "";
+        public string Description { get; set; } = "";
+        public bool IsActive { get; set; }
+    }
+
+    private sealed class CreateTaxTypeModel
+    {
+        [Required] public string MainCode { get; set; } = "";
+        [Required] public string SubCode { get; set; } = "";
+        [Required] public string TaxType { get; set; } = "";
+        [Required] public string Description { get; set; } = "";
+        public bool IsActive { get; set; }
+    }
+
+    private sealed class TaxRateItem
+    {
+        public Guid Id { get; set; }
+        public string Name { get; set; } = "";
+        public decimal Percent { get; set; }
+        public bool IsActive { get; set; }
+    }
+
+    private sealed class CreateTaxRateModel
+    {
+        [Required] public string Name { get; set; } = "";
+        public decimal Percent { get; set; }
+        public bool IsActive { get; set; }
+    }
+
+    private sealed class TaxReportItem
+    {
+        public DateTimeOffset From { get; set; }
+        public DateTimeOffset To { get; set; }
+        public Guid? BranchId { get; set; }
+        public decimal SalesTax { get; set; }
+        public decimal PurchaseTax { get; set; }
+        public decimal NetTax { get; set; }
+    }
+
+    private void RedirectToLogin()
+    {
+        var relative = Nav.ToBaseRelativePath(Nav.Uri);
+        var target = string.IsNullOrWhiteSpace(relative) ? "/login" : $"/login?return=/{Uri.EscapeDataString(relative)}";
+        Nav.NavigateTo(target);
+    }
+}

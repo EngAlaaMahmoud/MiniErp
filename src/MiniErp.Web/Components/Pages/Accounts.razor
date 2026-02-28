@@ -1,0 +1,378 @@
+@page "/accounts"
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@inject ApiSession Session
+@inject ApiClient Api
+@inject NavigationManager Nav
+@using MiniErp.Web.Security
+
+<PageTitle>@L["Nav.Accounts"]</PageTitle>
+
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="h3 m-0">@L["Nav.Accounts"]</h1>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-primary" @onclick="Load" disabled="@_busy">@L["Common.Refresh"]</button>
+            <a class="btn btn-outline-secondary" href="/">@L["Common.Back"]</a>
+        </div>
+    </div>
+
+    @if (!_ready)
+    {
+        <div class="text-muted">@L["Common.Loading"]</div>
+    }
+    else if (!Session.IsLoggedIn)
+    {
+        <div class="alert alert-warning">@L["Auth.Required"]</div>
+        <a class="btn btn-primary" href="/login">@L["Auth.Login"]</a>
+    }
+    else if (!Session.HasPermission(PermissionKeys.AccountsView))
+    {
+        <div class="alert alert-danger">@L["Auth.Unauthorized"]</div>
+    }
+    else
+    {
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <div class="alert alert-danger">@_error</div>
+        }
+
+        <div class="card">
+            <div class="card-body">
+                <div class="fw-bold mb-2">@L["Accounts.CashTransactionsWithBranch", Session.BranchId]</div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped align-middle">
+                        <thead>
+                            <tr>
+                                <th>@L["Common.Date"]</th>
+                                <th>@L["Common.Type"]</th>
+                                <th class="text-end">@L["Common.Amount"]</th>
+                                <th>@L["Common.Note"]</th>
+                                <th>@L["Common.Reference"]</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var t in _cash)
+                            {
+                                <tr>
+                                    <td class="text-muted">@t.At.LocalDateTime.ToString("yyyy-MM-dd HH:mm")</td>
+                                    <td><code>@TypeLabel(t.Type)</code></td>
+                                    <td class="text-end">@t.Amount</td>
+                                    <td>@(string.IsNullOrWhiteSpace(t.Note) ? "-" : t.Note)</td>
+                                    <td class="text-muted">@t.RefType</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-body">
+                <div class="fw-bold mb-2">@L["Accounts.CoaTitle"]</div>
+
+                @if (Session.HasPermission(PermissionKeys.AccountsManage))
+                {
+                    <div class="row g-2 align-items-end mb-3">
+                        <div class="col-12 col-md-2">
+                            <label class="form-label">@L["Common.Code"]</label>
+                            <input class="form-control" @bind="_newCode" disabled="@_busy" />
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <label class="form-label">@L["Common.Name"]</label>
+                            <input class="form-control" @bind="_newName" disabled="@_busy" />
+                        </div>
+                        <div class="col-12 col-md-2">
+                            <label class="form-label">@L["Common.Type"]</label>
+                            <select class="form-select" @bind="_newAccountType" disabled="@_busy">
+                                @foreach (var t in AccountTypes)
+                                {
+                                    <option value="@t.Value">@t.Label</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-3">
+                            <label class="form-label">@L["Common.Parent"]</label>
+                            <select class="form-select" @bind="_newParentId" disabled="@_busy">
+                                <option value="">-</option>
+                                @foreach (var a in _coaRows)
+                                {
+                                    <option value="@a.Id">@a.DisplayName</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-1">
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" @bind="_newIsPosting" disabled="@_busy" />
+                                <label class="form-check-label">@L["Common.Post"]</label>
+                            </div>
+                            <button class="btn btn-primary w-100" @onclick="CreateAccount" disabled="@_busy">@L["Common.Add"]</button>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="text-muted small mb-2">@L["Accounts.NoManagePermission"]</div>
+                }
+
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped align-middle">
+                        <thead>
+                            <tr>
+                                <th>@L["Common.Code"]</th>
+                                <th>@L["Common.Name"]</th>
+                                <th>@L["Common.Type"]</th>
+                                <th>@L["Common.Posting"]</th>
+                                <th>@L["Common.Active"]</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var a in _coaRows)
+                            {
+                                <tr>
+                                    <td><code>@a.Code</code></td>
+                                    <td>@a.DisplayName</td>
+                                    <td><code>@AccountTypeLabel(a.AccountType)</code></td>
+                                    <td>@(a.IsPosting ? L["Common.Yes"] : L["Common.No"])</td>
+                                    <td>@(a.IsActive ? L["Common.Yes"] : L["Common.No"])</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _ready;
+    private bool _busy;
+    private string? _error;
+    private List<CashTxnItem> _cash = [];
+    private List<ChartAccountItem> _coa = [];
+    private List<CoaRow> _coaRows = [];
+
+    private string _newCode = "";
+    private string _newName = "";
+    private int _newAccountType = 1;
+    private string _newParentId = "";
+    private bool _newIsPosting = true;
+
+    private (int Value, string Label)[] AccountTypes =>
+    [
+        (1, L["Accounts.AccountType.Asset"].Value),
+        (2, L["Accounts.AccountType.Liability"].Value),
+        (3, L["Accounts.AccountType.Equity"].Value),
+        (4, L["Accounts.AccountType.Revenue"].Value),
+        (5, L["Accounts.AccountType.Expense"].Value)
+    ];
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        await Session.EnsureLoadedAsync();
+        _ready = true;
+        StateHasChanged();
+
+        if (Session.IsLoggedIn && Session.HasPermission(PermissionKeys.AccountsView))
+        {
+            await Load();
+        }
+    }
+
+    private async Task Load()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            _cash = await Api.GetAsync<List<CashTxnItem>>($"accounts/cash?branchId={Session.BranchId}");
+            _coa = await Api.GetAsync<List<ChartAccountItem>>("accounts/coa");
+            _coaRows = BuildCoaRows(_coa);
+        }
+        catch (ApiUnauthorizedException ex)
+        {
+            if (ex.WasAuthenticated)
+            {
+                await Session.ClearAsync();
+            }
+            RedirectToLogin();
+        }
+        catch (ApiHttpException ex)
+        {
+            _error = string.IsNullOrWhiteSpace(ex.Body) ? ex.Message : ex.Body;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task CreateAccount()
+    {
+        if (!Session.HasPermission(PermissionKeys.AccountsManage))
+        {
+            _error = L["Accounts.Error.NotAllowed"].Value;
+            return;
+        }
+
+        var code = _newCode.Trim();
+        var name = _newName.Trim();
+        if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(name))
+        {
+            _error = L["Accounts.Error.CodeNameRequired"].Value;
+            return;
+        }
+
+        Guid? parentId = null;
+        if (!string.IsNullOrWhiteSpace(_newParentId) && Guid.TryParse(_newParentId, out var parsedParent) && parsedParent != Guid.Empty)
+        {
+            parentId = parsedParent;
+        }
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            var response = await Api.PostAsync("accounts/coa", new
+            {
+                code,
+                name,
+                accountType = _newAccountType,
+                parentAccountId = parentId,
+                isPosting = _newIsPosting,
+                isActive = true
+            });
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = await response.Content.ReadAsStringAsync();
+                return;
+            }
+
+            _newCode = "";
+            _newName = "";
+            _newParentId = "";
+            _newIsPosting = true;
+
+            await Load();
+        }
+        catch (ApiUnauthorizedException ex)
+        {
+            if (ex.WasAuthenticated)
+            {
+                await Session.ClearAsync();
+            }
+            RedirectToLogin();
+        }
+        catch (ApiHttpException ex)
+        {
+            _error = string.IsNullOrWhiteSpace(ex.Body) ? ex.Message : ex.Body;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private string AccountTypeLabel(int type)
+        => type switch
+        {
+            1 => L["Accounts.AccountType.Asset"].Value,
+            2 => L["Accounts.AccountType.Liability"].Value,
+            3 => L["Accounts.AccountType.Equity"].Value,
+            4 => L["Accounts.AccountType.Revenue"].Value,
+            5 => L["Accounts.AccountType.Expense"].Value,
+            _ => type.ToString()
+        };
+
+    private static List<CoaRow> BuildCoaRows(List<ChartAccountItem> items)
+    {
+        var byParent = items
+            .GroupBy(x => x.ParentAccountId ?? Guid.Empty)
+            .ToDictionary(x => x.Key, x => x.OrderBy(a => a.Code).ThenBy(a => a.Name).ToList());
+
+        var result = new List<CoaRow>(items.Count);
+        var visited = new HashSet<Guid>();
+
+        void Walk(Guid parentId, int level)
+        {
+            if (!byParent.TryGetValue(parentId, out var children))
+            {
+                return;
+            }
+
+            foreach (var child in children)
+            {
+                if (!visited.Add(child.Id))
+                {
+                    continue;
+                }
+
+                var indent = new string(' ', level * 2);
+                result.Add(new CoaRow(child.Id, child.Code, child.Name, indent + child.Name, child.AccountType, child.IsPosting, child.IsActive));
+                Walk(child.Id, level + 1);
+            }
+        }
+
+        Walk(Guid.Empty, 0);
+
+        foreach (var orphan in items.OrderBy(x => x.Code).ThenBy(x => x.Name))
+        {
+            if (visited.Add(orphan.Id))
+            {
+                result.Add(new CoaRow(orphan.Id, orphan.Code, orphan.Name, orphan.Name, orphan.AccountType, orphan.IsPosting, orphan.IsActive));
+            }
+        }
+
+        return result;
+    }
+
+    private void RedirectToLogin()
+    {
+        var relative = Nav.ToBaseRelativePath(Nav.Uri);
+        var target = string.IsNullOrWhiteSpace(relative) ? "/login" : $"/login?return=/{Uri.EscapeDataString(relative)}";
+        Nav.NavigateTo(target);
+    }
+
+    private static string TypeLabel(int type)
+        => type switch
+        {
+            1 => "SaleIn",
+            2 => "RefundOut",
+            3 => "ExpenseOut",
+            4 => "DepositIn",
+            5 => "WithdrawOut",
+            _ => type.ToString()
+        };
+
+    private sealed class CashTxnItem
+    {
+        public Guid Id { get; set; }
+        public Guid BranchId { get; set; }
+        public int Type { get; set; }
+        public decimal Amount { get; set; }
+        public string? Note { get; set; }
+        public string RefType { get; set; } = "";
+        public Guid RefId { get; set; }
+        public DateTimeOffset At { get; set; }
+    }
+
+    private sealed class ChartAccountItem
+    {
+        public Guid Id { get; set; }
+        public string Code { get; set; } = "";
+        public string Name { get; set; } = "";
+        public int AccountType { get; set; }
+        public Guid? ParentAccountId { get; set; }
+        public bool IsPosting { get; set; }
+        public bool IsActive { get; set; }
+    }
+
+    private sealed record CoaRow(Guid Id, string Code, string Name, string DisplayName, int AccountType, bool IsPosting, bool IsActive);
+}

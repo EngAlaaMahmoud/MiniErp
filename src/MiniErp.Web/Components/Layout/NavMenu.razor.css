@@ -3,27 +3,33 @@
     cursor: pointer;
     width: 3.5rem;
     height: 2.5rem;
-    color: white;
+    color: var(--sidebar-link);
     position: absolute;
     top: 0.5rem;
-    right: 1rem;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    background: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%28255, 255, 255, 0.55%29' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e") no-repeat center/1.75rem rgba(255, 255, 255, 0.1);
+    inset-inline-end: 1rem;
+    border: 1px solid var(--sidebar-border);
+    background: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%28255, 255, 255, 0.75%29' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e") no-repeat center/1.75rem var(--sidebar-hover-bg);
+}
+
+:global(html[data-theme="light"]) .navbar-toggler {
+    background: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%2815, 23, 42, 0.75%29' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e") no-repeat center/1.75rem var(--sidebar-hover-bg);
 }
 
 .navbar-toggler:checked {
-    background-color: rgba(255, 255, 255, 0.5);
+    background-color: var(--sidebar-active-bg);
 }
 
 .top-row {
     height: 3.75rem;
-    background-color: rgba(255,255,255,0.06);
-    border-bottom: 1px solid rgba(255,255,255,0.08);
+    background-color: var(--sidebar-top-bg);
+    border-bottom: 1px solid var(--sidebar-border);
+    color: var(--sidebar-link);
 }
 
 .navbar-brand {
     font-size: 1.05rem;
     letter-spacing: 0.2px;
+    color: var(--sidebar-link);
 }
 
 .bi {
@@ -31,7 +37,7 @@
     position: relative;
     width: 1.25rem;
     height: 1.25rem;
-    margin-right: 0.75rem;
+    margin-inline-end: 0.75rem;
     top: -1px;
     background-size: cover;
 }
@@ -62,7 +68,7 @@
     }
 
     .nav-item ::deep .nav-link {
-        color: #e5e7eb;
+        color: var(--sidebar-link);
         background: none;
         border: none;
         border-radius: 4px;
@@ -75,13 +81,13 @@
     }
 
 .nav-item ::deep a.active {
-    background-color: rgba(255,255,255,0.12);
-    color: #ffffff;
+    background-color: var(--sidebar-active-bg);
+    color: var(--sidebar-link-active);
 }
 
 .nav-item ::deep .nav-link:hover {
-    background-color: rgba(255,255,255,0.08);
-    color: white;
+    background-color: var(--sidebar-hover-bg);
+    color: var(--sidebar-link-hover);
 }
 
 .nav-scrollable {

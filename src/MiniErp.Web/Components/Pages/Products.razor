@@ -3,13 +3,14 @@
 @inject ApiSession Session
 @inject ApiClient Api
 @inject NavigationManager Nav
+@using System.ComponentModel.DataAnnotations
 
 <PageTitle>المنتجات</PageTitle>
 
 <div class="container">
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h1 class="h3 m-0">المنتجات</h1>
-        <a class="btn btn-outline-secondary" href="/">رجوع</a>
+        <a class="btn btn-outline-secondary" href="/">@L["Common.Back"]</a>
     </div>
 
     @if (!Session.IsLoggedIn)
@@ -39,6 +40,10 @@
                                     <tr>
                                         <th>الاسم</th>
                                         <th>SKU</th>
+                                        <th>Category</th>
+                                        <th>Tax</th>
+                                        <th>Tax Code</th>
+                                        <th class="text-end">Reorder</th>
                                         <th class="text-end">السعر</th>
                                         <th class="text-end">التكلفة</th>
                                         <th>نشط</th>
@@ -51,6 +56,10 @@
                                         <tr>
                                             <td>@p.Name</td>
                                             <td class="text-muted">@p.Sku</td>
+                                            <td>@LookupName(_categoryNameById, p.CategoryId)</td>
+                                            <td>@LookupName(_taxRateNameById, p.TaxRateId)</td>
+                                            <td>@LookupName(_taxTypeNameById, p.SalesTaxTypeId)</td>
+                                            <td class="text-end text-muted">@p.ReorderLevel</td>
                                             <td class="text-end">@p.Price</td>
                                             <td class="text-end text-muted">@p.Cost</td>
                                             <td>@(p.IsActive ? "نعم" : "لا")</td>
@@ -88,6 +97,43 @@
                                 <div class="col">
                                     <label class="form-label">التكلفة</label>
                                     <InputNumber class="form-control" @bind-Value="_create.Cost" />
+                                </div>
+                            </div>
+
+                            <div class="row g-2 mt-1">
+                                <div class="col-12">
+                                    <label class="form-label">Category</label>
+                                    <InputSelect class="form-select" @bind-Value="_create.CategoryId">
+                                        <option value="">-</option>
+                                        @foreach (var c in _categories)
+                                        {
+                                            <option value="@c.Id">@c.Name</option>
+                                        }
+                                    </InputSelect>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">Tax Rate</label>
+                                    <InputSelect class="form-select" @bind-Value="_create.TaxRateId">
+                                        <option value="">-</option>
+                                        @foreach (var r in _taxRates)
+                                        {
+                                            <option value="@r.Id">@r.Name (@(r.Percent * 100)%)</option>
+                                        }
+                                    </InputSelect>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">Tax Code (Sales)</label>
+                                    <InputSelect class="form-select" @bind-Value="_create.SalesTaxTypeId">
+                                        <option value="">-</option>
+                                        @foreach (var t in _taxTypes)
+                                        {
+                                            <option value="@t.Id">@t.MainCode/@t.SubCode - @t.TaxType</option>
+                                        }
+                                    </InputSelect>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">Reorder Level</label>
+                                    <InputNumber class="form-control" @bind-Value="_create.ReorderLevel" />
                                 </div>
                             </div>
                             <div class="form-check mt-2 mb-3">
@@ -128,6 +174,43 @@
                                         <InputNumber class="form-control" @bind-Value="_edit.Cost" />
                                     </div>
                                 </div>
+
+                                <div class="row g-2 mt-1">
+                                    <div class="col-12">
+                                        <label class="form-label">Category</label>
+                                        <InputSelect class="form-select" @bind-Value="_edit.CategoryId">
+                                            <option value="">-</option>
+                                            @foreach (var c in _categories)
+                                            {
+                                                <option value="@c.Id">@c.Name</option>
+                                            }
+                                        </InputSelect>
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label">Tax Rate</label>
+                                        <InputSelect class="form-select" @bind-Value="_edit.TaxRateId">
+                                            <option value="">-</option>
+                                            @foreach (var r in _taxRates)
+                                            {
+                                                <option value="@r.Id">@r.Name (@(r.Percent * 100)%)</option>
+                                            }
+                                        </InputSelect>
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label">Tax Code (Sales)</label>
+                                        <InputSelect class="form-select" @bind-Value="_edit.SalesTaxTypeId">
+                                            <option value="">-</option>
+                                            @foreach (var t in _taxTypes)
+                                            {
+                                                <option value="@t.Id">@t.MainCode/@t.SubCode - @t.TaxType</option>
+                                            }
+                                        </InputSelect>
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label">Reorder Level</label>
+                                        <InputNumber class="form-control" @bind-Value="_edit.ReorderLevel" />
+                                    </div>
+                                </div>
                                 <div class="form-check mt-2 mb-3">
                                     <InputCheckbox class="form-check-input" @bind-Value="_edit.IsActive" />
                                     <label class="form-check-label">نشط</label>
@@ -140,6 +223,88 @@
                                         <button class="btn btn-outline-primary" type="button" @onclick="AddBarcode">إضافة</button>
                                     </div>
                                 </div>
+
+                                <hr />
+
+                                <div class="fw-bold mb-2">الوحدات</div>
+                                @if (_unitsBusy)
+                                {
+                                    <div class="text-muted">Loading...</div>
+                                }
+                                else
+                                {
+                                    @if (!string.IsNullOrWhiteSpace(_unitError))
+                                    {
+                                        <div class="alert alert-danger">@_unitError</div>
+                                    }
+
+                                    @if (_units.Count == 0)
+                                    {
+                                        <div class="text-muted mb-2">لا توجد وحدات (سيتم إنشاء وحدة افتراضية عند إضافة منتج).</div>
+                                    }
+                                    else
+                                    {
+                                        <div class="table-responsive mb-2">
+                                            <table class="table table-sm table-striped align-middle">
+                                                <thead>
+                                                    <tr>
+                                                        <th>الاسم</th>
+                                                        <th class="text-end">Factor</th>
+                                                        <th>Default</th>
+                                                        <th>نشط</th>
+                                                        <th></th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @foreach (var u in _units)
+                                                    {
+                                                        <tr>
+                                                            <td>@u.Name</td>
+                                                            <td class="text-end">@u.Factor</td>
+                                                            <td>@(u.IsDefault ? "نعم" : "لا")</td>
+                                                            <td>@(u.IsActive ? "نعم" : "لا")</td>
+                                                            <td class="text-end">
+                                                                <button class="btn btn-sm btn-outline-secondary" type="button" @onclick="() => SelectUnitForEdit(u)">تعديل</button>
+                                                            </td>
+                                                        </tr>
+                                                    }
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    }
+
+                                    <div class="fw-bold mb-2">@(_unitEdit is null ? "إضافة وحدة" : "تعديل وحدة")</div>
+                                    <div class="row g-2">
+                                        <div class="col-12 col-md-6">
+                                            <label class="form-label">الاسم</label>
+                                            <InputText class="form-control" @bind-Value="_unitForm.Name" />
+                                        </div>
+                                        <div class="col-12 col-md-6">
+                                            <label class="form-label">Factor (كم وحدة أساسية)</label>
+                                            <input class="form-control" type="number" step="0.001" @bind-value="_unitForm.Factor" @bind-value:event="oninput" />
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="form-check mt-4">
+                                                <InputCheckbox class="form-check-input" @bind-Value="_unitForm.IsDefault" />
+                                                <label class="form-check-label">Default</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="form-check mt-4">
+                                                <InputCheckbox class="form-check-input" @bind-Value="_unitForm.IsActive" />
+                                                <label class="form-check-label">نشط</label>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="d-flex gap-2 mt-2">
+                                        <button class="btn btn-outline-primary" type="button" @onclick="SaveUnit" disabled="@_busy">حفظ</button>
+                                        @if (_unitEdit is not null)
+                                        {
+                                            <button class="btn btn-outline-secondary" type="button" @onclick="ClearUnitEdit" disabled="@_busy">إلغاء</button>
+                                        }
+                                    </div>
+                                }
 
                                 <button class="btn btn-success w-100" disabled="@_busy">حفظ التعديلات</button>
                             </EditForm>
@@ -156,10 +321,23 @@
     private string? _error;
     private string _search = "";
     private List<ProductItem> _products = [];
+    private List<CategoryItem> _categories = [];
+    private List<TaxRateItem> _taxRates = [];
+    private List<TaxTypeItem> _taxTypes = [];
+
+    private Dictionary<Guid, string> _categoryNameById = [];
+    private Dictionary<Guid, string> _taxRateNameById = [];
+    private Dictionary<Guid, string> _taxTypeNameById = [];
     private CreateProductModel _create = new() { IsActive = true };
     private EditProductModel? _edit;
     private string _barcode = "";
     private bool _initialLoadDone;
+
+    private bool _unitsBusy;
+    private string? _unitError;
+    private List<ProductUnitItem> _units = [];
+    private ProductUnitItem? _unitEdit;
+    private UnitFormModel _unitForm = new();
 
     protected override Task OnInitializedAsync() => Task.CompletedTask;
 
@@ -180,22 +358,33 @@
         StateHasChanged();
     }
 
+    private async Task LoadLookups()
+    {
+        _categories = await Api.GetAsync<List<CategoryItem>>("catalog/categories");
+        _taxRates = await Api.GetAsync<List<TaxRateItem>>("taxes/rates");
+        _taxTypes = await Api.GetAsync<List<TaxTypeItem>>("taxes/types");
+
+        _categoryNameById = _categories.ToDictionary(x => x.Id, x => x.Name);
+        _taxRateNameById = _taxRates.ToDictionary(x => x.Id, x => x.Name);
+        _taxTypeNameById = _taxTypes.ToDictionary(x => x.Id, x => $"{x.MainCode}/{x.SubCode}");
+    }
+
     private async Task Load()
     {
         _error = null;
         try
         {
+            await LoadLookups();
             var q = string.IsNullOrWhiteSpace(_search) ? "" : $"?search={Uri.EscapeDataString(_search)}";
             _products = await Api.GetAsync<List<ProductItem>>($"catalog/products{q}");
         }
-        catch (ApiUnauthorizedException)
+        catch (ApiUnauthorizedException ex)
         {
-            await Session.EnsureLoadedAsync();
-            if (Session.IsLoggedIn)
+            if (ex.WasAuthenticated)
             {
                 await Session.ClearAsync();
             }
-            Nav.NavigateTo("/login", forceLoad: true);
+            RedirectToLogin();
         }
         catch (ApiHttpException ex)
         {
@@ -219,6 +408,10 @@
                 sku = string.IsNullOrWhiteSpace(_create.Sku) ? null : _create.Sku,
                 price = _create.Price,
                 cost = _create.Cost,
+                categoryId = _create.CategoryId,
+                taxRateId = _create.TaxRateId,
+                salesTaxTypeId = _create.SalesTaxTypeId,
+                reorderLevel = _create.ReorderLevel,
                 isActive = _create.IsActive
             });
 
@@ -237,7 +430,7 @@
         }
     }
 
-    private void SelectForEdit(ProductItem p)
+    private async Task SelectForEdit(ProductItem p)
     {
         _edit = new EditProductModel
         {
@@ -246,9 +439,14 @@
             Sku = p.Sku,
             Price = p.Price,
             Cost = p.Cost,
+            CategoryId = p.CategoryId,
+            TaxRateId = p.TaxRateId,
+            SalesTaxTypeId = p.SalesTaxTypeId,
+            ReorderLevel = p.ReorderLevel,
             IsActive = p.IsActive
         };
         _barcode = "";
+        await LoadUnits(p.Id);
     }
 
     private async Task SaveEdit()
@@ -268,6 +466,10 @@
                 sku = string.IsNullOrWhiteSpace(_edit.Sku) ? null : _edit.Sku,
                 price = _edit.Price,
                 cost = _edit.Cost,
+                categoryId = _edit.CategoryId,
+                taxRateId = _edit.TaxRateId,
+                salesTaxTypeId = _edit.SalesTaxTypeId,
+                reorderLevel = _edit.ReorderLevel,
                 isActive = _edit.IsActive
             });
 
@@ -278,6 +480,98 @@
             }
 
             await Load();
+            await LoadUnits(_edit.Id);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task LoadUnits(Guid productId)
+    {
+        _unitsBusy = true;
+        _unitError = null;
+        try
+        {
+            _units = await Api.GetAsync<List<ProductUnitItem>>($"catalog/products/{productId}/units");
+        }
+        catch (ApiHttpException ex)
+        {
+            _unitError = string.IsNullOrWhiteSpace(ex.Body) ? ex.Message : ex.Body;
+        }
+        finally
+        {
+            _unitsBusy = false;
+        }
+    }
+
+    private void SelectUnitForEdit(ProductUnitItem unit)
+    {
+        _unitEdit = unit;
+        _unitForm = new UnitFormModel
+        {
+            Name = unit.Name,
+            Factor = unit.Factor,
+            IsDefault = unit.IsDefault,
+            IsActive = unit.IsActive
+        };
+    }
+
+    private void ClearUnitEdit()
+    {
+        _unitEdit = null;
+        _unitForm = new UnitFormModel();
+        _unitError = null;
+    }
+
+    private async Task SaveUnit()
+    {
+        if (_edit is null)
+        {
+            return;
+        }
+
+        _unitError = null;
+        if (string.IsNullOrWhiteSpace(_unitForm.Name) || _unitForm.Factor <= 0)
+        {
+            _unitError = "بيانات الوحدة غير صحيحة.";
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            HttpResponseMessage response;
+            if (_unitEdit is null)
+            {
+                response = await Api.PostAsync($"catalog/products/{_edit.Id}/units", new
+                {
+                    name = _unitForm.Name.Trim(),
+                    factor = _unitForm.Factor,
+                    isDefault = _unitForm.IsDefault,
+                    isActive = _unitForm.IsActive
+                });
+            }
+            else
+            {
+                response = await Api.PutAsync($"catalog/products/{_edit.Id}/units/{_unitEdit.Id}", new
+                {
+                    name = _unitForm.Name.Trim(),
+                    factor = _unitForm.Factor,
+                    isDefault = _unitForm.IsDefault,
+                    isActive = _unitForm.IsActive
+                });
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _unitError = await response.Content.ReadAsStringAsync();
+                return;
+            }
+
+            ClearUnitEdit();
+            await LoadUnits(_edit.Id);
         }
         finally
         {
@@ -318,20 +612,88 @@
         public string? Sku { get; set; }
         public decimal Price { get; set; }
         public decimal Cost { get; set; }
+        public Guid? CategoryId { get; set; }
+        public Guid? TaxRateId { get; set; }
+        public Guid? SalesTaxTypeId { get; set; }
+        public decimal ReorderLevel { get; set; }
         public bool IsActive { get; set; }
     }
 
     private class CreateProductModel
     {
-        public string Name { get; set; } = "";
+        [Required] public string Name { get; set; } = "";
         public string? Sku { get; set; }
         public decimal Price { get; set; }
         public decimal Cost { get; set; }
+        public Guid? CategoryId { get; set; }
+        public Guid? TaxRateId { get; set; }
+        public Guid? SalesTaxTypeId { get; set; }
+        public decimal ReorderLevel { get; set; }
         public bool IsActive { get; set; }
     }
 
     private sealed class EditProductModel : CreateProductModel
     {
         public Guid Id { get; set; }
+    }
+
+    private static string LookupName(IReadOnlyDictionary<Guid, string> map, Guid? id)
+    {
+        if (id is null)
+        {
+            return "-";
+        }
+
+        return map.TryGetValue(id.Value, out var name) ? name : id.Value.ToString();
+    }
+
+    private sealed class CategoryItem
+    {
+        public Guid Id { get; set; }
+        public string Name { get; set; } = "";
+        public bool IsActive { get; set; }
+    }
+
+    private sealed class TaxRateItem
+    {
+        public Guid Id { get; set; }
+        public string Name { get; set; } = "";
+        public decimal Percent { get; set; }
+        public bool IsActive { get; set; }
+    }
+
+    private sealed class TaxTypeItem
+    {
+        public Guid Id { get; set; }
+        public string MainCode { get; set; } = "";
+        public string SubCode { get; set; } = "";
+        public string TaxType { get; set; } = "";
+        public string Description { get; set; } = "";
+        public bool IsActive { get; set; }
+    }
+
+    private void RedirectToLogin()
+    {
+        var relative = Nav.ToBaseRelativePath(Nav.Uri);
+        var target = string.IsNullOrWhiteSpace(relative) ? "/login" : $"/login?return=/{Uri.EscapeDataString(relative)}";
+        Nav.NavigateTo(target);
+    }
+
+    private sealed class ProductUnitItem
+    {
+        public Guid Id { get; set; }
+        public Guid ProductId { get; set; }
+        public string Name { get; set; } = "";
+        public decimal Factor { get; set; }
+        public bool IsDefault { get; set; }
+        public bool IsActive { get; set; }
+    }
+
+    private sealed class UnitFormModel
+    {
+        public string Name { get; set; } = "";
+        public decimal Factor { get; set; } = 1m;
+        public bool IsDefault { get; set; }
+        public bool IsActive { get; set; } = true;
     }
 }

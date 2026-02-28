@@ -1,0 +1,168 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=8.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=8.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+
+  <data name="Nav.Dashboard" xml:space="preserve"><value>لوحة التحكم</value></data>
+  <data name="Nav.Invoices" xml:space="preserve"><value>الفواتير</value></data>
+  <data name="Nav.Products" xml:space="preserve"><value>المنتجات</value></data>
+  <data name="Nav.Categories" xml:space="preserve"><value>التصنيفات</value></data>
+  <data name="Nav.Inventory" xml:space="preserve"><value>المخزون</value></data>
+  <data name="Nav.Taxes" xml:space="preserve"><value>الضرائب</value></data>
+  <data name="Nav.Customers" xml:space="preserve"><value>العملاء</value></data>
+  <data name="Nav.Suppliers" xml:space="preserve"><value>الموردين</value></data>
+  <data name="Nav.Purchases" xml:space="preserve"><value>المشتريات</value></data>
+  <data name="Nav.Sales" xml:space="preserve"><value>مبيعات</value></data>
+  <data name="Nav.Returns" xml:space="preserve"><value>مرتجع</value></data>
+  <data name="Nav.Reports" xml:space="preserve"><value>التقارير</value></data>
+  <data name="Nav.Accounts" xml:space="preserve"><value>الحسابات</value></data>
+  <data name="Nav.Users" xml:space="preserve"><value>المستخدمين</value></data>
+  <data name="Nav.Permissions" xml:space="preserve"><value>الصلاحيات</value></data>
+  <data name="Nav.Login" xml:space="preserve"><value>تسجيل الدخول</value></data>
+  <data name="Nav.Logout" xml:space="preserve"><value>خروج</value></data>
+
+  <data name="Ui.Settings" xml:space="preserve"><value>الإعدادات</value></data>
+  <data name="Ui.Language" xml:space="preserve"><value>اللغة</value></data>
+  <data name="Ui.Language.Arabic" xml:space="preserve"><value>العربية</value></data>
+  <data name="Ui.Language.English" xml:space="preserve"><value>الإنجليزية</value></data>
+  <data name="Ui.Theme" xml:space="preserve"><value>الثيم</value></data>
+  <data name="Ui.Light" xml:space="preserve"><value>فاتح</value></data>
+  <data name="Ui.Dark" xml:space="preserve"><value>داكن</value></data>
+  <data name="Ui.Ocean" xml:space="preserve"><value>بحري</value></data>
+
+  <data name="Common.Add" xml:space="preserve"><value>إضافة</value></data>
+  <data name="Common.Back" xml:space="preserve"><value>رجوع</value></data>
+  <data name="Common.Refresh" xml:space="preserve"><value>تحديث</value></data>
+  <data name="Common.Save" xml:space="preserve"><value>حفظ</value></data>
+  <data name="Common.Delete" xml:space="preserve"><value>حذف</value></data>
+  <data name="Common.Edit" xml:space="preserve"><value>تعديل</value></data>
+  <data name="Common.Cancel" xml:space="preserve"><value>إلغاء</value></data>
+  <data name="Common.Active" xml:space="preserve"><value>نشط</value></data>
+  <data name="Common.Yes" xml:space="preserve"><value>نعم</value></data>
+  <data name="Common.No" xml:space="preserve"><value>لا</value></data>
+  <data name="Common.Loading" xml:space="preserve"><value>جاري التحميل...</value></data>
+  <data name="Common.Search" xml:space="preserve"><value>بحث</value></data>
+  <data name="Common.Type" xml:space="preserve"><value>النوع</value></data>
+  <data name="Common.Number" xml:space="preserve"><value>الرقم</value></data>
+  <data name="Common.Date" xml:space="preserve"><value>التاريخ</value></data>
+  <data name="Common.Party" xml:space="preserve"><value>الطرف</value></data>
+  <data name="Common.Tax" xml:space="preserve"><value>الضريبة</value></data>
+  <data name="Common.Total" xml:space="preserve"><value>الإجمالي</value></data>
+  <data name="Common.Amount" xml:space="preserve"><value>المبلغ</value></data>
+  <data name="Common.Note" xml:space="preserve"><value>ملاحظة</value></data>
+  <data name="Common.Reference" xml:space="preserve"><value>مرجع</value></data>
+  <data name="Common.Description" xml:space="preserve"><value>البيان</value></data>
+  <data name="Common.Code" xml:space="preserve"><value>الكود</value></data>
+  <data name="Common.Name" xml:space="preserve"><value>الاسم</value></data>
+  <data name="Common.Branch" xml:space="preserve"><value>الفرع</value></data>
+  <data name="Common.From" xml:space="preserve"><value>من</value></data>
+  <data name="Common.To" xml:space="preserve"><value>إلى</value></data>
+  <data name="Common.Load" xml:space="preserve"><value>تحميل</value></data>
+  <data name="Common.Parent" xml:space="preserve"><value>الرئيسي</value></data>
+  <data name="Common.Post" xml:space="preserve"><value>ترحيل</value></data>
+  <data name="Common.Posting" xml:space="preserve"><value>حركة</value></data>
+  <data name="Common.CurrentBranchOnly" xml:space="preserve"><value>الفرع الحالي فقط</value></data>
+  <data name="Common.Added" xml:space="preserve"><value>تمت الإضافة.</value></data>
+  <data name="Common.Updated" xml:space="preserve"><value>تم التحديث.</value></data>
+
+  <data name="Auth.Required" xml:space="preserve"><value>مطلوب تسجيل الدخول.</value></data>
+  <data name="Auth.Login" xml:space="preserve"><value>تسجيل الدخول</value></data>
+  <data name="Auth.Enter" xml:space="preserve"><value>دخول</value></data>
+  <data name="Auth.UserName" xml:space="preserve"><value>اسم المستخدم</value></data>
+  <data name="Auth.Unauthorized" xml:space="preserve"><value>غير مصرح.</value></data>
+  <data name="Auth.LoginFailed" xml:space="preserve"><value>فشل تسجيل الدخول.</value></data>
+
+  <data name="Dashboard.Title" xml:space="preserve"><value>لوحة التحكم</value></data>
+  <data name="Dashboard.Account" xml:space="preserve"><value>الحساب</value></data>
+  <data name="Dashboard.QuickLinks" xml:space="preserve"><value>روابط سريعة</value></data>
+  <data name="Dashboard.User" xml:space="preserve"><value>المستخدم</value></data>
+  <data name="Dashboard.Tenant" xml:space="preserve"><value>Tenant</value></data>
+  <data name="Dashboard.Branch" xml:space="preserve"><value>الفرع</value></data>
+  <data name="Dashboard.Device" xml:space="preserve"><value>الجهاز</value></data>
+
+  <data name="Customers.Title" xml:space="preserve"><value>العملاء</value></data>
+  <data name="Customers.Search" xml:space="preserve"><value>بحث بالاسم أو الهاتف...</value></data>
+  <data name="Customers.Add" xml:space="preserve"><value>إضافة عميل</value></data>
+  <data name="Customers.Edit" xml:space="preserve"><value>تعديل عميل</value></data>
+  <data name="Customers.Name" xml:space="preserve"><value>الاسم</value></data>
+  <data name="Customers.Phone" xml:space="preserve"><value>الهاتف</value></data>
+  <data name="Customers.PhoneOptional" xml:space="preserve"><value>الهاتف (اختياري)</value></data>
+
+  <data name="Inventory.Title" xml:space="preserve"><value>المخزون</value></data>
+  <data name="Inventory.Balance" xml:space="preserve"><value>رصيد المخزون</value></data>
+  <data name="Inventory.BalanceWithBranch" xml:space="preserve"><value>رصيد المخزون (فرع: {0})</value></data>
+  <data name="Inventory.Product" xml:space="preserve"><value>المنتج</value></data>
+  <data name="Inventory.Qty" xml:space="preserve"><value>الكمية</value></data>
+  <data name="Inventory.Adjustment" xml:space="preserve"><value>تسوية مخزون</value></data>
+  <data name="Inventory.QtyDelta" xml:space="preserve"><value>التغير في الكمية (موجب/سالب)</value></data>
+  <data name="Inventory.QtyDeltaShort" xml:space="preserve"><value>QtyDelta</value></data>
+  <data name="Inventory.Select" xml:space="preserve"><value>اختر...</value></data>
+  <data name="Inventory.AddLine" xml:space="preserve"><value>إضافة سطر</value></data>
+  <data name="Inventory.NoteOptional" xml:space="preserve"><value>ملاحظة (اختياري)</value></data>
+  <data name="Inventory.SaveAdjustment" xml:space="preserve"><value>حفظ التسوية</value></data>
+  <data name="Inventory.Error.SelectProduct" xml:space="preserve"><value>اختر منتج.</value></data>
+  <data name="Inventory.Error.QtyDeltaNonZero" xml:space="preserve"><value>يجب أن يكون QtyDelta غير 0.</value></data>
+
+  <data name="Invoices.LatestWithBranch" xml:space="preserve"><value>آخر الفواتير (فرع: {0})</value></data>
+
+  <data name="Accounts.CashTransactionsWithBranch" xml:space="preserve"><value>حركات الخزينة (فرع: {0})</value></data>
+  <data name="Accounts.CoaTitle" xml:space="preserve"><value>شجرة الحسابات</value></data>
+  <data name="Accounts.NoManagePermission" xml:space="preserve"><value>لا تملك صلاحية إدارة الحسابات.</value></data>
+  <data name="Accounts.AccountType.Asset" xml:space="preserve"><value>أصول</value></data>
+  <data name="Accounts.AccountType.Liability" xml:space="preserve"><value>خصوم</value></data>
+  <data name="Accounts.AccountType.Equity" xml:space="preserve"><value>حقوق ملكية</value></data>
+  <data name="Accounts.AccountType.Revenue" xml:space="preserve"><value>إيرادات</value></data>
+  <data name="Accounts.AccountType.Expense" xml:space="preserve"><value>مصروفات</value></data>
+  <data name="Accounts.Error.NotAllowed" xml:space="preserve"><value>غير مصرح.</value></data>
+  <data name="Accounts.Error.CodeNameRequired" xml:space="preserve"><value>الكود والاسم مطلوبان.</value></data>
+
+  <data name="Taxes.Tab.Codes" xml:space="preserve"><value>أكواد الضريبة</value></data>
+  <data name="Taxes.Tab.Rates" xml:space="preserve"><value>نسب الضريبة</value></data>
+  <data name="Taxes.Tab.Report" xml:space="preserve"><value>تقرير الضرائب</value></data>
+  <data name="Taxes.SearchCodesPlaceholder" xml:space="preserve"><value>بحث (T_1 / V009 / VAT ...)</value></data>
+  <data name="Taxes.AddTaxType" xml:space="preserve"><value>إضافة نوع ضريبة</value></data>
+
+  <data name="Reports.Title" xml:space="preserve"><value>التقارير</value></data>
+  <data name="Reports.Print" xml:space="preserve"><value>طباعة</value></data>
+  <data name="Reports.Report" xml:space="preserve"><value>تقرير</value></data>
+  <data name="Reports.ReportKind" xml:space="preserve"><value>نوع التقرير</value></data>
+  <data name="Reports.Kind.Inventory" xml:space="preserve"><value>مخازن</value></data>
+  <data name="Reports.Kind.Sales" xml:space="preserve"><value>مبيعات</value></data>
+  <data name="Reports.Kind.Purchases" xml:space="preserve"><value>مشتريات</value></data>
+  <data name="Reports.Kind.Accounts" xml:space="preserve"><value>حسابات</value></data>
+  <data name="Reports.Show" xml:space="preserve"><value>عرض</value></data>
+  <data name="Reports.Clear" xml:space="preserve"><value>مسح</value></data>
+  <data name="Reports.FilterBy" xml:space="preserve"><value>تصفية حسب</value></data>
+  <data name="Reports.Filter.None" xml:space="preserve"><value>بدون</value></data>
+  <data name="Reports.Filter.Customer" xml:space="preserve"><value>العميل</value></data>
+  <data name="Reports.Filter.Supplier" xml:space="preserve"><value>المورد</value></data>
+  <data name="Reports.Filter.InvoiceNo" xml:space="preserve"><value>رقم الفاتورة</value></data>
+  <data name="Reports.Filter.Product" xml:space="preserve"><value>الصنف</value></data>
+  <data name="Reports.Filter.CashType" xml:space="preserve"><value>نوع الحركة</value></data>
+  <data name="Reports.InvalidDateRange" xml:space="preserve"><value>نطاق التاريخ غير صحيح.</value></data>
+  <data name="Reports.Sales.Title" xml:space="preserve"><value>تقرير المبيعات</value></data>
+  <data name="Reports.Purchases.Title" xml:space="preserve"><value>تقرير المشتريات</value></data>
+  <data name="Reports.Accounts.Title" xml:space="preserve"><value>تقرير الخزينة</value></data>
+  <data name="Reports.Inventory.Title" xml:space="preserve"><value>تقرير حركة المخزون</value></data>
+  <data name="Reports.Summary.InvoiceCount" xml:space="preserve"><value>عدد الفواتير</value></data>
+  <data name="Reports.Summary.Paid" xml:space="preserve"><value>مدفوع</value></data>
+  <data name="Reports.Summary.Net" xml:space="preserve"><value>صافي</value></data>
+  <data name="Reports.Summary.In" xml:space="preserve"><value>إيراد</value></data>
+  <data name="Reports.Summary.Out" xml:space="preserve"><value>مصروف</value></data>
+  <data name="Reports.Summary.StockIn" xml:space="preserve"><value>وارد</value></data>
+  <data name="Reports.Summary.StockOut" xml:space="preserve"><value>صادر</value></data>
+  <data name="Reports.Error.FilterValueRequired" xml:space="preserve"><value>اختر قيمة للتصفية.</value></data>
+
+  <data name="Error.Unexpected" xml:space="preserve"><value>حدث خطأ غير متوقع.</value></data>
+  <data name="Error.Reload" xml:space="preserve"><value>إعادة تحميل</value></data>
+</root>

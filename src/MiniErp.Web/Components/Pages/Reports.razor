@@ -1,0 +1,786 @@
+@page "/reports"
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@inject ApiSession Session
+@inject ApiClient Api
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@using Microsoft.JSInterop
+@using MiniErp.Web.Security
+
+<PageTitle>@L["Reports.Title"]</PageTitle>
+
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-3 d-print-none">
+        <h1 class="h3 m-0">@L["Reports.Title"]</h1>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-dark" @onclick="Print" disabled="@_busy">@L["Reports.Print"]</button>
+            <a class="btn btn-outline-secondary" href="/">@L["Common.Back"]</a>
+        </div>
+    </div>
+
+    @if (!_ready)
+    {
+        <div class="text-muted">@L["Common.Loading"]</div>
+    }
+    else if (!Session.IsLoggedIn)
+    {
+        <div class="alert alert-warning d-print-none">@L["Auth.Required"]</div>
+        <a class="btn btn-primary d-print-none" href="/login">@L["Auth.Login"]</a>
+    }
+    else if (!Session.HasPermission(PermissionKeys.ReportsView))
+    {
+        <div class="alert alert-danger d-print-none">@L["Auth.Unauthorized"]</div>
+    }
+    else
+    {
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <div class="alert alert-danger d-print-none">@_error</div>
+        }
+
+        <div class="d-none d-print-block mb-3">
+            <h2 class="h5 text-center m-0">@L["Reports.Report"]</h2>
+            <div class="text-center small text-muted">@PrintSubtitle</div>
+        </div>
+
+        <div class="card mb-3 d-print-none">
+            <div class="card-body">
+                <div class="row g-2 align-items-end">
+                    <div class="col-12 col-md-3">
+                        <label class="form-label">@L["Common.From"]</label>
+                        <InputDate class="form-control" @bind-Value="From" />
+                    </div>
+                    <div class="col-12 col-md-3">
+                        <label class="form-label">@L["Common.To"]</label>
+                        <InputDate class="form-control" @bind-Value="To" />
+                    </div>
+                    <div class="col-12 col-md-3">
+                        <label class="form-label">@L["Reports.ReportKind"]</label>
+                        <select class="form-select" value="@_reportKind" @onchange="OnReportKindChanged">
+                            <option value="inventory">@L["Reports.Kind.Inventory"]</option>
+                            <option value="sales">@L["Reports.Kind.Sales"]</option>
+                            <option value="purchases">@L["Reports.Kind.Purchases"]</option>
+                            <option value="accounts">@L["Reports.Kind.Accounts"]</option>
+                        </select>
+                    </div>
+                    <div class="col-12 col-md-3">
+                        <label class="form-label">@L["Reports.FilterBy"]</label>
+                        <select class="form-select" value="@_filterField" @onchange="OnFilterFieldChanged">
+                            @foreach (var opt in GetFilterOptions())
+                            {
+                                <option value="@opt.Value">@opt.Label</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+
+                @if (_filterField != "none")
+                {
+                    <div class="row g-2 mt-1 align-items-end">
+                        <div class="col-12">
+                            @if (_reportKind == "sales" && _filterField == "customer")
+                            {
+                                <select class="form-select" @bind="_salesCustomerId" disabled="@_busy">
+                                    <option value="">@L["Inventory.Select"]</option>
+                                    @foreach (var c in _customers)
+                                    {
+                                        <option value="@c.Id">@c.Name</option>
+                                    }
+                                </select>
+                            }
+                            else if (_reportKind == "sales" && _filterField == "invoiceNo")
+                            {
+                                <InputText class="form-control" @bind-Value="_salesSaleNo" placeholder="@L["Reports.Filter.InvoiceNo"]" disabled="@_busy" />
+                            }
+                            else if (_reportKind == "purchases" && _filterField == "supplier")
+                            {
+                                <select class="form-select" @bind="_purchasesSupplierId" disabled="@_busy">
+                                    <option value="">@L["Inventory.Select"]</option>
+                                    @foreach (var s in _suppliers)
+                                    {
+                                        <option value="@s.Id">@s.Name</option>
+                                    }
+                                </select>
+                            }
+                            else if (_reportKind == "purchases" && _filterField == "invoiceNo")
+                            {
+                                <InputText class="form-control" @bind-Value="_purchasesPurchaseNo" placeholder="@L["Reports.Filter.InvoiceNo"]" disabled="@_busy" />
+                            }
+                            else if (_reportKind == "inventory" && _filterField == "product")
+                            {
+                                <select class="form-select" @bind="_inventoryProductId" disabled="@_busy">
+                                    <option value="">@L["Inventory.Select"]</option>
+                                    @foreach (var p in _products)
+                                    {
+                                        <option value="@p.Id">@p.Name</option>
+                                    }
+                                </select>
+                            }
+                            else if (_reportKind == "accounts" && _filterField == "cashType")
+                            {
+                                <select class="form-select" @bind="_accountsCashType" disabled="@_busy">
+                                    <option value="">@L["Reports.Filter.None"]</option>
+                                    @foreach (var t in CashTypes)
+                                    {
+                                        <option value="@t.Value">@t.Label</option>
+                                    }
+                                </select>
+                            }
+                        </div>
+                    </div>
+                }
+
+                <div class="row g-2 mt-2 align-items-end">
+                    <div class="col-12 col-md-3 d-flex gap-2 justify-content-md-end">
+                        <button class="btn btn-outline-primary" @onclick="Load" disabled="@_busy">@L["Reports.Show"]</button>
+                        <button class="btn btn-outline-secondary" @onclick="Clear" disabled="@_busy">@L["Reports.Clear"]</button>
+                    </div>
+                </div>
+                <div class="small text-muted mt-2">@L["Common.Branch"]: <code>@Session.BranchId</code></div>
+            </div>
+        </div>
+
+        @if (_reportKind == "sales")
+        {
+            <div class="card mb-3">
+                <div class="card-body">
+                    <div class="fw-bold mb-2">@L["Reports.Sales.Title"]</div>
+                    <div class="row g-2 mb-2">
+                        <div class="col-6 col-lg-3"><div class="small text-muted">@L["Reports.Summary.InvoiceCount"]</div><div class="fw-bold">@_sales?.Summary.Count</div></div>
+                        <div class="col-6 col-lg-3"><div class="small text-muted">@L["Common.Total"]</div><div class="fw-bold">@_sales?.Summary.Total</div></div>
+                        <div class="col-6 col-lg-3"><div class="small text-muted">@L["Common.Tax"]</div><div class="fw-bold">@_sales?.Summary.TaxTotal</div></div>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-sm table-striped align-middle">
+                            <thead>
+                                <tr>
+                                    <th>@L["Common.Number"]</th>
+                                    <th>@L["Common.Date"]</th>
+                                    <th>@L["Reports.Filter.Customer"]</th>
+                                    <th class="text-end">@L["Common.Tax"]</th>
+                                    <th class="text-end">@L["Common.Total"]</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var r in _sales?.Rows ?? [])
+                                {
+                                    <tr>
+                                        <td><code>@r.SaleNo</code></td>
+                                        <td class="text-muted">@r.At.LocalDateTime.ToString("yyyy-MM-dd HH:mm")</td>
+                                        <td>@(string.IsNullOrWhiteSpace(r.CustomerName) ? "-" : r.CustomerName)</td>
+                                        <td class="text-end">@r.TaxTotal</td>
+                                        <td class="text-end">@r.Total</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+        else if (_reportKind == "purchases")
+        {
+            <div class="card mb-3">
+                <div class="card-body">
+                    <div class="fw-bold mb-2">@L["Reports.Purchases.Title"]</div>
+                    <div class="row g-2 mb-2">
+                        <div class="col-6 col-lg-3"><div class="small text-muted">@L["Reports.Summary.InvoiceCount"]</div><div class="fw-bold">@_purchases?.Summary.Count</div></div>
+                        <div class="col-6 col-lg-3"><div class="small text-muted">@L["Common.Total"]</div><div class="fw-bold">@_purchases?.Summary.Total</div></div>
+                        <div class="col-6 col-lg-3"><div class="small text-muted">@L["Common.Tax"]</div><div class="fw-bold">@_purchases?.Summary.TaxTotal</div></div>
+                        <div class="col-6 col-lg-3"><div class="small text-muted">@L["Reports.Summary.Paid"]</div><div class="fw-bold">@_purchases?.Summary.CashPaidTotal</div></div>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-sm table-striped align-middle">
+                            <thead>
+                                <tr>
+                                    <th>@L["Common.Number"]</th>
+                                    <th>@L["Common.Date"]</th>
+                                    <th>@L["Reports.Filter.Supplier"]</th>
+                                    <th class="text-end">@L["Common.Tax"]</th>
+                                    <th class="text-end">@L["Common.Total"]</th>
+                                    <th class="text-end">@L["Reports.Summary.Paid"]</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var r in _purchases?.Rows ?? [])
+                                {
+                                    <tr>
+                                        <td><code>@r.PurchaseNo</code></td>
+                                        <td class="text-muted">@r.At.LocalDateTime.ToString("yyyy-MM-dd HH:mm")</td>
+                                        <td>@(string.IsNullOrWhiteSpace(r.SupplierName) ? "-" : r.SupplierName)</td>
+                                        <td class="text-end">@r.TaxTotal</td>
+                                        <td class="text-end">@r.Total</td>
+                                        <td class="text-end">@r.CashPaid</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+        else if (_reportKind == "accounts")
+        {
+            <div class="card mb-3">
+                <div class="card-body">
+                    <div class="fw-bold mb-2">@L["Reports.Accounts.Title"]</div>
+                    <div class="row g-2 mb-2">
+                        <div class="col-6 col-lg-4"><div class="small text-muted">@L["Reports.Summary.Net"]</div><div class="fw-bold">@_cash?.Summary.NetTotal</div></div>
+                        <div class="col-6 col-lg-4"><div class="small text-muted">@L["Reports.Summary.In"]</div><div class="fw-bold">@_cash?.Summary.InTotal</div></div>
+                        <div class="col-6 col-lg-4"><div class="small text-muted">@L["Reports.Summary.Out"]</div><div class="fw-bold">@_cash?.Summary.OutTotal</div></div>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-sm table-striped align-middle">
+                            <thead>
+                                <tr>
+                                    <th>@L["Common.Date"]</th>
+                                    <th>@L["Common.Type"]</th>
+                                    <th class="text-end">@L["Common.Amount"]</th>
+                                    <th>@L["Common.Note"]</th>
+                                    <th>@L["Common.Reference"]</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var r in _cash?.Rows ?? [])
+                                {
+                                    <tr>
+                                        <td class="text-muted">@r.At.LocalDateTime.ToString("yyyy-MM-dd HH:mm")</td>
+                                        <td><code>@CashTypeLabel(r.Type)</code></td>
+                                        <td class="text-end">@r.Amount</td>
+                                        <td>@(string.IsNullOrWhiteSpace(r.Note) ? "-" : r.Note)</td>
+                                        <td class="text-muted">@r.RefType</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="card mb-3">
+                <div class="card-body">
+                    <div class="fw-bold mb-2">@L["Reports.Inventory.Title"]</div>
+                    <div class="row g-2 mb-2">
+                        <div class="col-6 col-lg-4"><div class="small text-muted">@L["Reports.Summary.StockIn"]</div><div class="fw-bold">@_stock?.Summary.InTotal</div></div>
+                        <div class="col-6 col-lg-4"><div class="small text-muted">@L["Reports.Summary.StockOut"]</div><div class="fw-bold">@_stock?.Summary.OutTotal</div></div>
+                        <div class="col-6 col-lg-4"><div class="small text-muted">@L["Reports.Summary.Net"]</div><div class="fw-bold">@_stock?.Summary.NetTotal</div></div>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-sm table-striped align-middle">
+                            <thead>
+                                <tr>
+                                    <th>@L["Common.Date"]</th>
+                                    <th>@L["Reports.Filter.Product"]</th>
+                                    <th class="text-end">@L["Inventory.Qty"]</th>
+                                    <th>@L["Common.Type"]</th>
+                                    <th>@L["Common.Reference"]</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var r in _stock?.Rows ?? [])
+                                {
+                                    <tr>
+                                        <td class="text-muted">@r.At.LocalDateTime.ToString("yyyy-MM-dd HH:mm")</td>
+                                        <td>@r.ProductName</td>
+                                        <td class="text-end">@r.QtyDelta</td>
+                                        <td><code>@StockReasonLabel(r.Reason)</code></td>
+                                        <td class="text-muted">@r.RefType</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private bool _ready;
+    private bool _busy;
+    private string? _error;
+
+    private DateOnly From = DateOnly.FromDateTime(DateTime.UtcNow.Date);
+    private DateOnly To = DateOnly.FromDateTime(DateTime.UtcNow.Date);
+    private string _reportKind = "sales";
+    private string _filterField = "none";
+
+    private string _salesCustomerId = "";
+    private string _salesSaleNo = "";
+
+    private string _purchasesSupplierId = "";
+    private string _purchasesPurchaseNo = "";
+
+    private string _inventoryProductId = "";
+
+    private string _accountsCashType = "";
+
+    private List<NamedId> _customers = [];
+    private List<NamedId> _suppliers = [];
+    private List<NamedId> _products = [];
+
+    private SalesReportResponse? _sales;
+    private PurchasesReportResponse? _purchases;
+    private CashReportResponse? _cash;
+    private StockLedgerReportResponse? _stock;
+
+    private string PrintSubtitle
+    {
+        get
+        {
+            var baseText = $"{L["Common.From"]} {From:yyyy-MM-dd} {L["Common.To"]} {To:yyyy-MM-dd} — {L["Common.Branch"]}: {Session.BranchId}";
+            var filter = GetFilterSummary();
+            return string.IsNullOrWhiteSpace(filter) ? baseText : $"{baseText} — {filter}";
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        await Session.EnsureLoadedAsync();
+        _ready = true;
+        StateHasChanged();
+    }
+
+    private IEnumerable<(string Value, string Label)> GetFilterOptions()
+    {
+        yield return ("none", L["Reports.Filter.None"].Value);
+
+        if (_reportKind == "sales")
+        {
+            yield return ("customer", L["Reports.Filter.Customer"].Value);
+            yield return ("invoiceNo", L["Reports.Filter.InvoiceNo"].Value);
+        }
+        else if (_reportKind == "purchases")
+        {
+            yield return ("supplier", L["Reports.Filter.Supplier"].Value);
+            yield return ("invoiceNo", L["Reports.Filter.InvoiceNo"].Value);
+        }
+        else if (_reportKind == "inventory")
+        {
+            yield return ("product", L["Reports.Filter.Product"].Value);
+        }
+        else if (_reportKind == "accounts")
+        {
+            yield return ("cashType", L["Reports.Filter.CashType"].Value);
+        }
+    }
+
+    private async Task EnsureLookupsAsync()
+    {
+        if (_reportKind == "sales" && _filterField == "customer" && _customers.Count == 0)
+        {
+            var rows = await Api.GetAsync<List<CustomerLookupItem>>("reports/lookups/customers");
+            _customers = rows
+                .OrderBy(x => x.Name)
+                .Select(x => new NamedId(x.Id, x.Name))
+                .ToList();
+        }
+
+        if (_reportKind == "purchases" && _filterField == "supplier" && _suppliers.Count == 0)
+        {
+            var rows = await Api.GetAsync<List<SupplierLookupItem>>("reports/lookups/suppliers");
+            _suppliers = rows
+                .OrderBy(x => x.Name)
+                .Select(x => new NamedId(x.Id, x.Name))
+                .ToList();
+        }
+
+        if (_reportKind == "inventory" && _filterField == "product" && _products.Count == 0)
+        {
+            var rows = await Api.GetAsync<List<ProductLookupItem>>("reports/lookups/products");
+            _products = rows
+                .OrderBy(x => x.Name)
+                .Select(x => new NamedId(x.Id, x.Name))
+                .ToList();
+        }
+    }
+
+    private void OnReportKindChanged(ChangeEventArgs e)
+    {
+        _reportKind = (e.Value?.ToString() ?? "sales").Trim().ToLowerInvariant();
+        if (_reportKind is not ("sales" or "purchases" or "inventory" or "accounts"))
+        {
+            _reportKind = "sales";
+        }
+
+        _filterField = "none";
+        ClearFilterValues();
+        Clear();
+    }
+
+    private async Task OnFilterFieldChanged(ChangeEventArgs e)
+    {
+        _filterField = (e.Value?.ToString() ?? "none").Trim();
+        if (!GetFilterOptions().Any(x => x.Value == _filterField))
+        {
+            _filterField = "none";
+        }
+
+        ClearFilterValues();
+        await EnsureLookupsAsync();
+    }
+
+    private void ClearFilterValues()
+    {
+        _salesCustomerId = "";
+        _salesSaleNo = "";
+        _purchasesSupplierId = "";
+        _purchasesPurchaseNo = "";
+        _inventoryProductId = "";
+        _accountsCashType = "";
+    }
+
+    private string? GetFilterSummary()
+    {
+        if (_filterField == "none")
+        {
+            return null;
+        }
+
+        if (_reportKind == "sales" && _filterField == "customer" && Guid.TryParse(_salesCustomerId, out var cid) && cid != Guid.Empty)
+        {
+            var name = _customers.FirstOrDefault(x => x.Id == cid)?.Name ?? cid.ToString();
+            return $"{L["Reports.Filter.Customer"]}: {name}";
+        }
+
+        if (_reportKind == "sales" && _filterField == "invoiceNo" && !string.IsNullOrWhiteSpace(_salesSaleNo))
+        {
+            return $"{L["Reports.Filter.InvoiceNo"]}: {_salesSaleNo.Trim()}";
+        }
+
+        if (_reportKind == "purchases" && _filterField == "supplier" && Guid.TryParse(_purchasesSupplierId, out var sid) && sid != Guid.Empty)
+        {
+            var name = _suppliers.FirstOrDefault(x => x.Id == sid)?.Name ?? sid.ToString();
+            return $"{L["Reports.Filter.Supplier"]}: {name}";
+        }
+
+        if (_reportKind == "purchases" && _filterField == "invoiceNo" && !string.IsNullOrWhiteSpace(_purchasesPurchaseNo))
+        {
+            return $"{L["Reports.Filter.InvoiceNo"]}: {_purchasesPurchaseNo.Trim()}";
+        }
+
+        if (_reportKind == "inventory" && _filterField == "product" && Guid.TryParse(_inventoryProductId, out var pid) && pid != Guid.Empty)
+        {
+            var name = _products.FirstOrDefault(x => x.Id == pid)?.Name ?? pid.ToString();
+            return $"{L["Reports.Filter.Product"]}: {name}";
+        }
+
+        if (_reportKind == "accounts" && _filterField == "cashType" && int.TryParse(_accountsCashType, out var cashType))
+        {
+            var label = CashTypes.FirstOrDefault(x => x.Value == cashType).Label;
+            return $"{L["Reports.Filter.CashType"]}: {label}";
+        }
+
+        return null;
+    }
+
+    private async Task Load()
+    {
+        if (To < From)
+        {
+            _error = L["Reports.InvalidDateRange"].Value;
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            _sales = null;
+            _purchases = null;
+            _cash = null;
+            _stock = null;
+
+            var branchId = Session.BranchId;
+
+            await EnsureLookupsAsync();
+
+            if (_filterField != "none")
+            {
+                var hasValue = _filterField switch
+                {
+                    "customer" => !string.IsNullOrWhiteSpace(_salesCustomerId),
+                    "supplier" => !string.IsNullOrWhiteSpace(_purchasesSupplierId),
+                    "product" => !string.IsNullOrWhiteSpace(_inventoryProductId),
+                    "cashType" => !string.IsNullOrWhiteSpace(_accountsCashType),
+                    "invoiceNo" when _reportKind == "sales" => !string.IsNullOrWhiteSpace(_salesSaleNo),
+                    "invoiceNo" when _reportKind == "purchases" => !string.IsNullOrWhiteSpace(_purchasesPurchaseNo),
+                    _ => true
+                };
+
+                if (!hasValue)
+                {
+                    _error = L["Reports.Error.FilterValueRequired"].Value;
+                    return;
+                }
+            }
+
+            if (_reportKind == "sales")
+            {
+                var url = $"reports/sales?branchId={branchId}&from={From:yyyy-MM-dd}&to={To:yyyy-MM-dd}";
+                if (_filterField == "customer" && Guid.TryParse(_salesCustomerId, out var cid) && cid != Guid.Empty)
+                {
+                    url += $"&customerId={cid}";
+                }
+                if (_filterField == "invoiceNo" && !string.IsNullOrWhiteSpace(_salesSaleNo))
+                {
+                    url += $"&saleNo={Uri.EscapeDataString(_salesSaleNo.Trim())}";
+                }
+
+                _sales = await Api.GetAsync<SalesReportResponse>(url);
+            }
+            else if (_reportKind == "purchases")
+            {
+                var url = $"reports/purchases?branchId={branchId}&from={From:yyyy-MM-dd}&to={To:yyyy-MM-dd}";
+                if (_filterField == "supplier" && Guid.TryParse(_purchasesSupplierId, out var sid) && sid != Guid.Empty)
+                {
+                    url += $"&supplierId={sid}";
+                }
+                if (_filterField == "invoiceNo" && !string.IsNullOrWhiteSpace(_purchasesPurchaseNo))
+                {
+                    url += $"&purchaseNo={Uri.EscapeDataString(_purchasesPurchaseNo.Trim())}";
+                }
+
+                _purchases = await Api.GetAsync<PurchasesReportResponse>(url);
+            }
+            else if (_reportKind == "accounts")
+            {
+                var url = $"reports/cash?branchId={branchId}&from={From:yyyy-MM-dd}&to={To:yyyy-MM-dd}";
+                if (_filterField == "cashType" && int.TryParse(_accountsCashType, out var cashType))
+                {
+                    url += $"&type={cashType}";
+                }
+
+                _cash = await Api.GetAsync<CashReportResponse>(url);
+            }
+            else
+            {
+                var url = $"reports/stock-ledger?branchId={branchId}&from={From:yyyy-MM-dd}&to={To:yyyy-MM-dd}";
+                if (_filterField == "product" && Guid.TryParse(_inventoryProductId, out var pid) && pid != Guid.Empty)
+                {
+                    url += $"&productId={pid}";
+                }
+
+                _stock = await Api.GetAsync<StockLedgerReportResponse>(url);
+            }
+        }
+        catch (ApiUnauthorizedException ex)
+        {
+            if (ex.WasAuthenticated)
+            {
+                await Session.ClearAsync();
+            }
+            RedirectToLogin();
+        }
+        catch (ApiHttpException ex)
+        {
+            _error = string.IsNullOrWhiteSpace(ex.Body) ? ex.Message : ex.Body;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void Clear()
+    {
+        _error = null;
+        _sales = null;
+        _purchases = null;
+        _cash = null;
+        _stock = null;
+    }
+
+    private async Task Print()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("window.print");
+        }
+        catch
+        {
+            // ignore
+        }
+    }
+
+    private void RedirectToLogin()
+    {
+        var relative = Nav.ToBaseRelativePath(Nav.Uri);
+        var target = string.IsNullOrWhiteSpace(relative) ? "/login" : $"/login?return=/{Uri.EscapeDataString(relative)}";
+        Nav.NavigateTo(target);
+    }
+
+    private sealed class SalesReportResponse
+    {
+        public DateOnly From { get; set; }
+        public DateOnly To { get; set; }
+        public Guid BranchId { get; set; }
+        public SalesReportSummary Summary { get; set; } = new();
+        public List<SalesReportRow> Rows { get; set; } = [];
+    }
+
+    private sealed class SalesReportSummary
+    {
+        public int Count { get; set; }
+        public decimal Total { get; set; }
+        public decimal TaxTotal { get; set; }
+    }
+
+    private sealed class SalesReportRow
+    {
+        public Guid SaleId { get; set; }
+        public string SaleNo { get; set; } = "";
+        public DateTimeOffset At { get; set; }
+        public string? CustomerName { get; set; }
+        public decimal Total { get; set; }
+        public decimal TaxTotal { get; set; }
+    }
+
+    private sealed class PurchasesReportResponse
+    {
+        public DateOnly From { get; set; }
+        public DateOnly To { get; set; }
+        public Guid BranchId { get; set; }
+        public PurchasesReportSummary Summary { get; set; } = new();
+        public List<PurchasesReportRow> Rows { get; set; } = [];
+    }
+
+    private sealed class PurchasesReportSummary
+    {
+        public int Count { get; set; }
+        public decimal Total { get; set; }
+        public decimal TaxTotal { get; set; }
+        public decimal CashPaidTotal { get; set; }
+    }
+
+    private sealed class PurchasesReportRow
+    {
+        public Guid PurchaseId { get; set; }
+        public string PurchaseNo { get; set; } = "";
+        public DateTimeOffset At { get; set; }
+        public string? SupplierName { get; set; }
+        public decimal Total { get; set; }
+        public decimal TaxTotal { get; set; }
+        public decimal CashPaid { get; set; }
+    }
+
+    private sealed class CashReportResponse
+    {
+        public DateOnly From { get; set; }
+        public DateOnly To { get; set; }
+        public Guid BranchId { get; set; }
+        public CashReportSummary Summary { get; set; } = new();
+        public List<CashReportRow> Rows { get; set; } = [];
+    }
+
+    private sealed class CashReportSummary
+    {
+        public decimal NetTotal { get; set; }
+        public decimal InTotal { get; set; }
+        public decimal OutTotal { get; set; }
+    }
+
+    private sealed class CashReportRow
+    {
+        public Guid Id { get; set; }
+        public DateTimeOffset At { get; set; }
+        public int Type { get; set; }
+        public decimal Amount { get; set; }
+        public string? Note { get; set; }
+        public string RefType { get; set; } = "";
+        public Guid RefId { get; set; }
+    }
+
+    private sealed class StockLedgerReportResponse
+    {
+        public DateOnly From { get; set; }
+        public DateOnly To { get; set; }
+        public Guid BranchId { get; set; }
+        public StockLedgerReportSummary Summary { get; set; } = new();
+        public List<StockLedgerReportRow> Rows { get; set; } = [];
+    }
+
+    private sealed class StockLedgerReportSummary
+    {
+        public decimal InTotal { get; set; }
+        public decimal OutTotal { get; set; }
+        public decimal NetTotal { get; set; }
+    }
+
+    private sealed class StockLedgerReportRow
+    {
+        public DateTimeOffset At { get; set; }
+        public Guid ProductId { get; set; }
+        public string ProductName { get; set; } = "";
+        public decimal QtyDelta { get; set; }
+        public int Reason { get; set; }
+        public string RefType { get; set; } = "";
+        public Guid RefId { get; set; }
+    }
+
+    private static string CashTypeLabel(int type)
+        => type switch
+        {
+            1 => "SaleIn",
+            2 => "RefundOut",
+            3 => "ExpenseOut",
+            4 => "DepositIn",
+            5 => "WithdrawOut",
+            _ => type.ToString()
+        };
+
+    private static string StockReasonLabel(int reason)
+        => reason switch
+        {
+            1 => "Sale",
+            2 => "Return",
+            3 => "Adjustment",
+            4 => "Purchase",
+            _ => reason.ToString()
+        };
+
+    private static readonly (int Value, string Label)[] CashTypes =
+    [
+        (1, "SaleIn"),
+        (2, "RefundOut"),
+        (3, "ExpenseOut"),
+        (4, "DepositIn"),
+        (5, "WithdrawOut")
+    ];
+
+    private sealed record NamedId(Guid Id, string Name);
+
+    private sealed class CustomerLookupItem
+    {
+        public Guid Id { get; set; }
+        public string Name { get; set; } = "";
+    }
+
+    private sealed class SupplierLookupItem
+    {
+        public Guid Id { get; set; }
+        public string Name { get; set; } = "";
+    }
+
+    private sealed class ProductLookupItem
+    {
+        public Guid Id { get; set; }
+        public string Name { get; set; } = "";
+    }
+}

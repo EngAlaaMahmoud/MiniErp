@@ -4,9 +4,11 @@ namespace MiniErp.Web.Services;
 
 public sealed class ApiSession(ProtectedLocalStorage storage)
 {
-    private const string StorageKey = "miniErp.session.v1";
+    private const string StorageKey = "miniErp.session.v2";
     private bool _loaded;
     private readonly SemaphoreSlim _loadLock = new(1, 1);
+
+    public event Action? Changed;
 
     public Guid TenantId { get; private set; }
     public Guid DeviceId { get; private set; }
@@ -14,8 +16,12 @@ public sealed class ApiSession(ProtectedLocalStorage storage)
     public string? AccessToken { get; private set; }
     public string? UserName { get; private set; }
     public string? Role { get; private set; }
+    public IReadOnlyList<string> PermissionKeys { get; private set; } = Array.Empty<string>();
 
     public bool IsLoggedIn => TenantId != Guid.Empty && DeviceId != Guid.Empty && !string.IsNullOrWhiteSpace(AccessToken);
+
+    public bool HasPermission(string key)
+        => PermissionKeys.Any(x => string.Equals(x, key, StringComparison.OrdinalIgnoreCase));
 
     public async Task EnsureLoadedAsync()
     {
@@ -24,6 +30,7 @@ public sealed class ApiSession(ProtectedLocalStorage storage)
             return;
         }
 
+        var changed = false;
         await _loadLock.WaitAsync();
         try
         {
@@ -45,6 +52,7 @@ public sealed class ApiSession(ProtectedLocalStorage storage)
             _loaded = true;
             if (!result.Success || result.Value is null)
             {
+                changed = true;
                 return;
             }
 
@@ -54,10 +62,17 @@ public sealed class ApiSession(ProtectedLocalStorage storage)
             AccessToken = result.Value.AccessToken;
             UserName = result.Value.UserName;
             Role = result.Value.Role;
+            PermissionKeys = result.Value.PermissionKeys ?? Array.Empty<string>();
+            changed = true;
         }
         finally
         {
             _loadLock.Release();
+        }
+
+        if (changed)
+        {
+            Changed?.Invoke();
         }
     }
 
@@ -70,11 +85,23 @@ public sealed class ApiSession(ProtectedLocalStorage storage)
         UserName = userName;
         Role = role;
         await SaveAsync();
+        Changed?.Invoke();
+    }
+
+    public async Task SetPermissionsAsync(IReadOnlyList<string> permissionKeys)
+    {
+        PermissionKeys = (permissionKeys ?? Array.Empty<string>())
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => x.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        await SaveAsync();
+        Changed?.Invoke();
     }
 
     public async Task SaveAsync()
     {
-        var session = new StoredSession(TenantId, DeviceId, BranchId, AccessToken, UserName, Role);
+        var session = new StoredSession(TenantId, DeviceId, BranchId, AccessToken, UserName, Role, PermissionKeys.ToArray());
         await storage.SetAsync(StorageKey, session);
     }
 
@@ -86,7 +113,9 @@ public sealed class ApiSession(ProtectedLocalStorage storage)
         AccessToken = null;
         UserName = null;
         Role = null;
+        PermissionKeys = Array.Empty<string>();
         await storage.DeleteAsync(StorageKey);
+        Changed?.Invoke();
     }
 
     private sealed record StoredSession(
@@ -95,6 +124,7 @@ public sealed class ApiSession(ProtectedLocalStorage storage)
         Guid BranchId,
         string? AccessToken,
         string? UserName,
-        string? Role
+        string? Role,
+        string[]? PermissionKeys
     );
 }

@@ -6,6 +6,10 @@ public sealed record ProductListItem(
     string? Sku,
     decimal Price,
     decimal Cost,
+    Guid? CategoryId,
+    Guid? TaxRateId,
+    Guid? SalesTaxTypeId,
+    decimal ReorderLevel,
     bool IsActive
 );
 
@@ -14,6 +18,10 @@ public sealed record CreateProductRequest(
     string? Sku,
     decimal Price,
     decimal Cost,
+    Guid? CategoryId,
+    Guid? TaxRateId,
+    Guid? SalesTaxTypeId,
+    decimal ReorderLevel,
     bool IsActive
 );
 
@@ -22,6 +30,10 @@ public sealed record UpdateProductRequest(
     string? Sku,
     decimal Price,
     decimal Cost,
+    Guid? CategoryId,
+    Guid? TaxRateId,
+    Guid? SalesTaxTypeId,
+    decimal ReorderLevel,
     bool IsActive
 );
 
@@ -33,4 +45,3 @@ public sealed record BarcodeLookupResponse(
     decimal Price,
     string Barcode
 );
-

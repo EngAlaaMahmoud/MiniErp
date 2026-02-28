@@ -8,6 +8,7 @@ namespace MiniErp.Web.Services;
 public sealed class ApiClient(HttpClient http, ApiSession session)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    private static readonly HttpRequestOptionsKey<bool> WasAuthenticatedKey = new("MiniErp.WasAuthenticated");
 
     public async Task<T> GetAsync<T>(string path, CancellationToken ct = default)
     {
@@ -16,7 +17,8 @@ public sealed class ApiClient(HttpClient http, ApiSession session)
 
         if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
-            throw new ApiUnauthorizedException();
+            request.Options.TryGetValue(WasAuthenticatedKey, out var wasAuthenticated);
+            throw new ApiUnauthorizedException(wasAuthenticated);
         }
 
         if (!response.IsSuccessStatusCode)
@@ -82,6 +84,7 @@ public sealed class ApiClient(HttpClient http, ApiSession session)
     {
         await session.EnsureLoadedAsync();
         var request = new HttpRequestMessage(method, path.TrimStart('/'));
+        request.Options.Set(WasAuthenticatedKey, !string.IsNullOrWhiteSpace(session.AccessToken));
 
         if (session.TenantId != Guid.Empty)
         {
@@ -111,7 +114,12 @@ public sealed record PinLoginResult(
 
 public sealed class ApiUnauthorizedException : Exception
 {
-    public ApiUnauthorizedException() : base("Unauthorized") { }
+    public ApiUnauthorizedException(bool wasAuthenticated) : base("Unauthorized")
+    {
+        WasAuthenticated = wasAuthenticated;
+    }
+
+    public bool WasAuthenticated { get; }
 }
 
 public sealed class ApiHttpException(System.Net.HttpStatusCode statusCode, string body) : Exception($"HTTP {(int)statusCode} {statusCode}")

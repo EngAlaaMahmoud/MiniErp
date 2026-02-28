@@ -13,6 +13,9 @@ public sealed record SaleDetailsResponse(
 public sealed record SaleDetailsItem(
     Guid ProductId,
     string ProductName,
+    Guid? ProductUnitId,
+    string? UnitName,
+    decimal UnitFactor,
     decimal Qty,
     decimal UnitPrice,
     decimal Discount,
@@ -21,6 +24,6 @@ public sealed record SaleDetailsItem(
 
 public sealed record SaleDetailsPayment(
     string Method,
-    decimal Amount
+    decimal Amount,
+    string? ReferenceNo
 );
-
