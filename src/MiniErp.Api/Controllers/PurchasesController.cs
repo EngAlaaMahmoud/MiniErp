@@ -6,7 +6,9 @@ using MiniErp.Api.Contracts.Purchases;
 using MiniErp.Api.Data;
 using MiniErp.Api.Domain;
 using MiniErp.Api.Domain.Enums;
+using MiniErp.Api.Infrastructure.Accounting;
 using MiniErp.Api.Infrastructure.Inventory;
+using MiniErp.Api.Infrastructure.Tax;
 using MiniErp.Api.Security;
 
 namespace MiniErp.Api.Controllers;
@@ -79,14 +81,17 @@ public sealed class PurchasesController(AppDbContext db) : ControllerBase
         if (!string.IsNullOrWhiteSpace(search))
         {
             var s = search.Trim();
-            q = q.Where(x => EF.Functions.Like(x.Number, $"%{s}%") || (x.SupplierName != null && x.SupplierName.Contains(s)));
+            q = q.Where(x =>
+                EF.Functions.Like(x.Number, $"%{s}%") ||
+                (x.ExternalNumber != null && EF.Functions.Like(x.ExternalNumber, $"%{s}%")) ||
+                (x.SupplierName != null && x.SupplierName.Contains(s)));
         }
 
         var items = await q
             .OrderByDescending(x => x.At)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .Select(x => new PurchaseListItem(x.Id, x.Number, x.BranchId, x.At, x.SupplierName, x.Total, x.CashPaid, x.TaxTotal))
+            .Select(x => new PurchaseListItem(x.Id, x.Number, x.ExternalNumber, x.BranchId, x.At, x.SupplierName, x.Total, x.CashPaid, x.TaxTotal))
             .ToListAsync(ct);
 
         return Ok(items);
@@ -131,6 +136,8 @@ public sealed class PurchasesController(AppDbContext db) : ControllerBase
 
         Guid? supplierId = null;
         string? supplierName = null;
+        string? supplierTaxRegistrationNo = null;
+        string? supplierAddress = null;
         if (request.SupplierId is not null && request.SupplierId.Value != Guid.Empty)
         {
             var supplier = await db.Suppliers.SingleOrDefaultAsync(x => x.Id == request.SupplierId.Value && x.IsActive, ct);
@@ -141,10 +148,23 @@ public sealed class PurchasesController(AppDbContext db) : ControllerBase
 
             supplierId = supplier.Id;
             supplierName = supplier.Name;
+            supplierTaxRegistrationNo = supplier.TaxRegistrationNo;
+            supplierAddress = BuildPartyAddress(
+                supplier.Country,
+                supplier.Governorate,
+                supplier.City,
+                supplier.BuildingNo,
+                supplier.Floor,
+                supplier.Apartment,
+                supplier.StreetName,
+                supplier.PostalCode,
+                supplier.Address);
         }
         else if (!string.IsNullOrWhiteSpace(request.SupplierName))
         {
             supplierName = request.SupplierName.Trim();
+            supplierTaxRegistrationNo = string.IsNullOrWhiteSpace(request.SupplierTaxRegistrationNo) ? null : request.SupplierTaxRegistrationNo.Trim();
+            supplierAddress = string.IsNullOrWhiteSpace(request.SupplierAddress) ? null : request.SupplierAddress.Trim();
         }
 
         var productIds = request.Items.Select(x => x.ProductId).Distinct().ToArray();
@@ -161,6 +181,11 @@ public sealed class PurchasesController(AppDbContext db) : ControllerBase
         if (products.Any(x => !x.IsActive))
         {
             return BadRequest(new { error = "INACTIVE_PRODUCT" });
+        }
+
+        if (products.Any(x => x.TaxRateId == null))
+        {
+            return BadRequest(new { error = "PRODUCT_TAX_NOT_SET" });
         }
 
         var unitIds = request.Items.Where(x => x.ProductUnitId != null).Select(x => x.ProductUnitId!.Value).Distinct().ToArray();
@@ -227,6 +252,12 @@ public sealed class PurchasesController(AppDbContext db) : ControllerBase
             return BadRequest(new { error = "INVALID_CASH_PAID" });
         }
 
+        var onAccountAmount = total - request.CashPaid;
+        if (onAccountAmount > 0 && supplierId is null)
+        {
+            return BadRequest(new { error = "SUPPLIER_REQUIRED_FOR_ONACCOUNT" });
+        }
+
         var now = DateTimeOffset.UtcNow;
         var purchaseId = Guid.NewGuid();
         var seq = await NextCounterAsync(db, tenantId, "pur_no", ct);
@@ -242,9 +273,12 @@ public sealed class PurchasesController(AppDbContext db) : ControllerBase
             DeviceId = deviceId,
             UserId = userId,
             Number = purchaseNo,
-            At = now,
+            ExternalNumber = string.IsNullOrWhiteSpace(request.ExternalNumber) ? null : request.ExternalNumber.Trim(),
+            At = request.At ?? now,
             SupplierId = supplierId,
             SupplierName = supplierName,
+            SupplierTaxRegistrationNo = supplierTaxRegistrationNo,
+            SupplierAddress = supplierAddress,
             Total = total,
             TaxTotal = 0,
             CashPaid = request.CashPaid,
@@ -280,6 +314,16 @@ public sealed class PurchasesController(AppDbContext db) : ControllerBase
         db.PurchaseItems.AddRange(purchaseItems);
         purchase.TaxTotal = purchaseItems.Sum(x => x.TaxAmount);
 
+        var taxLedgerLines = purchaseItems
+            .GroupBy(x =>
+            {
+                var rateId = taxRateIdByProductId[x.ProductId];
+                return (TaxRateId: rateId, x.TaxPercent);
+            })
+            .Select(g => new TaxEngine.Line(g.Key.TaxRateId, g.Key.TaxPercent, decimal.Round(g.Sum(x => x.TaxAmount), 4, MidpointRounding.AwayFromZero)))
+            .ToList();
+        TaxEngine.AddTaxLedgerEntries(db, tenantId, request.BranchId, now, TaxLedgerType.Input, "Purchase", purchaseId, taxLedgerLines);
+
         var ledger = purchaseItems.Select(x => new StockLedger
         {
             Id = Guid.NewGuid(),
@@ -312,10 +356,74 @@ public sealed class PurchasesController(AppDbContext db) : ControllerBase
             });
         }
 
+        var netTotal = decimal.Round(purchase.Total - purchase.TaxTotal, 4, MidpointRounding.AwayFromZero);
+        var inputVat = decimal.Round(purchase.TaxTotal, 4, MidpointRounding.AwayFromZero);
+        var cashPaid = decimal.Round(request.CashPaid, 4, MidpointRounding.AwayFromZero);
+        var apAmount = decimal.Round(onAccountAmount, 4, MidpointRounding.AwayFromZero);
+
+        var journalLines = new List<AccountingEngine.Line>
+        {
+            new(AccountingEngine.Codes.Inventory, Debit: netTotal, Credit: 0m, SupplierId: supplierId),
+        };
+        if (inputVat != 0)
+        {
+            journalLines.Add(new(AccountingEngine.Codes.InputVat, Debit: inputVat, Credit: 0m, SupplierId: supplierId));
+        }
+        if (cashPaid != 0)
+        {
+            journalLines.Add(new(AccountingEngine.Codes.Cash, Debit: 0m, Credit: cashPaid, SupplierId: supplierId));
+        }
+        if (apAmount != 0)
+        {
+            journalLines.Add(new(AccountingEngine.Codes.AccountsPayable, Debit: 0m, Credit: apAmount, SupplierId: supplierId));
+        }
+
+        var (journalOk, journalError) = await AccountingEngine.TryAddJournalEntryAsync(
+            db,
+            tenantId,
+            request.BranchId,
+            now,
+            "Purchase",
+            purchaseId,
+            $"Purchase {purchaseNo}",
+            journalLines,
+            ct);
+
+        if (!journalOk)
+        {
+            return BadRequest(new { error = journalError });
+        }
+
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
 
-        return Created("", new CreatePurchaseResponse(purchaseId, purchaseNo, total));
+        return Created("", new CreatePurchaseResponse(purchaseId, purchaseNo, total, purchase.TaxTotal));
+    }
+
+    private static string? BuildPartyAddress(
+        string? country,
+        string? governorate,
+        string? city,
+        string? buildingNo,
+        string? floor,
+        string? apartment,
+        string? streetName,
+        string? postalCode,
+        string? freeForm)
+    {
+        var parts = new List<string>(10);
+
+        if (!string.IsNullOrWhiteSpace(country)) parts.Add(country.Trim());
+        if (!string.IsNullOrWhiteSpace(governorate)) parts.Add(governorate.Trim());
+        if (!string.IsNullOrWhiteSpace(city)) parts.Add(city.Trim());
+        if (!string.IsNullOrWhiteSpace(buildingNo)) parts.Add(buildingNo.Trim());
+        if (!string.IsNullOrWhiteSpace(floor)) parts.Add(floor.Trim());
+        if (!string.IsNullOrWhiteSpace(apartment)) parts.Add(apartment.Trim());
+        if (!string.IsNullOrWhiteSpace(streetName)) parts.Add(streetName.Trim());
+        if (!string.IsNullOrWhiteSpace(postalCode)) parts.Add(postalCode.Trim());
+        if (!string.IsNullOrWhiteSpace(freeForm)) parts.Add(freeForm.Trim());
+
+        return parts.Count == 0 ? null : string.Join(" - ", parts);
     }
 
     private static decimal ComputeIncludedTaxAmount(decimal lineTotal, decimal percent)

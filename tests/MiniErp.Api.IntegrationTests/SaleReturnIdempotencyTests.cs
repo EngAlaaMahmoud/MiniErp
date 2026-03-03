@@ -61,6 +61,12 @@ public sealed class SaleReturnIdempotencyTests : IClassFixture<MiniErpApiFixture
 
         var printCount = await db.PrintJobs.CountAsync(x => x.RefType == "Sale" && x.RefId == first.Body.SaleId);
         Assert.Equal(1, printCount);
+
+        var taxLedgerCount = await db.TaxLedger.CountAsync(x => x.RefType == "Sale" && x.RefId == first.Body.SaleId);
+        Assert.Equal(1, taxLedgerCount);
+
+        var journalCount = await db.JournalEntries.CountAsync(x => x.SourceType == "Sale" && x.SourceId == first.Body.SaleId);
+        Assert.Equal(1, journalCount);
     }
 
     [SkippableFact]
@@ -116,6 +122,12 @@ public sealed class SaleReturnIdempotencyTests : IClassFixture<MiniErpApiFixture
 
         var printCount = await db.PrintJobs.CountAsync(x => x.RefType == "Return" && x.RefId == first.Body.ReturnId);
         Assert.Equal(1, printCount);
+
+        var taxLedgerCount = await db.TaxLedger.CountAsync(x => x.RefType == "Return" && x.RefId == first.Body.ReturnId);
+        Assert.Equal(1, taxLedgerCount);
+
+        var journalCount = await db.JournalEntries.CountAsync(x => x.SourceType == "Return" && x.SourceId == first.Body.ReturnId);
+        Assert.Equal(1, journalCount);
     }
 
     [SkippableFact]

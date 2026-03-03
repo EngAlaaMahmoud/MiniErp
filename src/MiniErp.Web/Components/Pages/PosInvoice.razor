@@ -4,27 +4,31 @@
 @inject ApiClient Api
 @inject NavigationManager Nav
 @inject IJSRuntime JS
-@using Microsoft.JSInterop
+@using Microsoft.AspNetCore.Components.Web
 @using Net.Codecrete.QrCodeGenerator
+@using MiniErp.Web.Security
+@using System.Net.Http.Json
 
-<PageTitle>مبيعات</PageTitle>
+<PageTitle>@L["Nav.Sales"]</PageTitle>
 
-<div class="container pos-page">
+<div class="container">
     <div class="d-flex justify-content-between align-items-center mb-3">
-        <h1 class="h3 m-0">مبيعات</h1>
-        <div class="d-flex gap-2">
-            <a class="btn btn-outline-secondary" href="/">لوحة التحكم</a>
-        </div>
+        <h1 class="h3 m-0">@L["Nav.Sales"]</h1>
+        <a class="btn btn-outline-secondary" href="/">@L["Nav.Dashboard"]</a>
     </div>
 
     @if (!_ready)
     {
-        <div class="text-muted">Loading...</div>
+        <div class="text-muted">@L["Common.Loading"]</div>
     }
     else if (!Session.IsLoggedIn)
     {
-        <div class="alert alert-warning">مطلوب تسجيل الدخول.</div>
-        <a class="btn btn-primary" href="/login">تسجيل الدخول</a>
+        <div class="alert alert-warning">@L["Auth.Required"]</div>
+        <a class="btn btn-primary" href="/login">@L["Auth.Login"]</a>
+    }
+    else if (!Session.HasPermission(PermissionKeys.SalesCreate))
+    {
+        <div class="alert alert-danger">@L["Auth.Unauthorized"]</div>
     }
     else
     {
@@ -37,10 +41,10 @@
         {
             <div class="alert alert-success d-print-none">
                 @_success
-                @if (_lastReceipt is not null)
+                @if (_receipt is not null)
                 {
-                    <div class="mt-2 d-flex gap-2">
-                        <button class="btn btn-sm btn-outline-dark" @onclick="PrintLast" disabled="@_busy">طباعة</button>
+                    <div class="mt-2">
+                        <button class="btn btn-sm btn-outline-dark" @onclick="Print" disabled="@_busy">@L["Common.Print"]</button>
                     </div>
                 }
             </div>
@@ -48,24 +52,73 @@
 
         <div class="row g-3 d-print-none">
             <div class="col-lg-8">
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <div class="fw-bold mb-2">@L["Sales.MainInfo"]</div>
+                        <div class="row g-2">
+                            <div class="col-md-4">
+                                <label class="form-label">@L["Sales.Number"]</label>
+                                <input class="form-control" value="@(_receipt?.SaleNo ?? L["Sales.AutoSequenceHint"].Value)" readonly />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">@L["Sales.OrderDate"]</label>
+                                <InputDate class="form-control" @bind-Value="_atDate" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">@L["Sales.PaymentMethod"]</label>
+                                <select class="form-select" @bind="_paymentMethod" @bind:after="OnPaymentMethodChanged">
+                                    <option value="Cash">@L["Payments.Cash"]</option>
+                                    <option value="Visa">@L["Payments.Visa"]</option>
+                                    <option value="Bank">@L["Payments.Bank"]</option>
+                                    <option value="OnAccount">@L["Payments.OnAccount"]</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="row g-2 mt-2">
+                            <div class="col-md-6">
+                                <label class="form-label">@L["Sales.CustomerOptional"]</label>
+                                <select class="form-select" @bind="_customerId" @bind:after="OnCustomerChanged">
+                                    <option value="">-</option>
+                                    @foreach (var c in _customers.Where(x => x.IsActive))
+                                    {
+                                        <option value="@c.Id">@c.Name</option>
+                                    }
+                                </select>
+                                <div class="small text-muted mt-1">@L["Sales.CustomerNote"]</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">@L["Sales.CustomerNameOptional"]</label>
+                                <InputText class="form-control" @bind-Value="_customerName" />
+                            </div>
+                        </div>
+
+                        <div class="row g-2 mt-2">
+                            <div class="col-md-6">
+                                <label class="form-label">@L["Sales.CustomerTaxRegistrationOrNationalId"]</label>
+                                <InputText class="form-control" @bind-Value="_customerTaxRegistrationNo" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">@L["Sales.Withholding"]</label>
+                                <input class="form-control" value="0.05 / w013 / T4" readonly />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="card">
                     <div class="card-body">
-                        <div class="mb-3">
-                            <label class="form-label">العميل (اختياري)</label>
-                            <select class="form-select" @bind="_customerId">
-                                <option value="">-</option>
-                                @foreach (var c in _customers.Where(x => x.IsActive))
-                                {
-                                    <option value="@c.Id">@c.Name</option>
-                                }
-                            </select>
+                        <div class="fw-bold mb-2">@L["Sales.Items"]</div>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <div class="text-muted small">@L["Sales.PriceIncludesVatHint"]</div>
+                            <button class="btn btn-sm btn-outline-secondary" @onclick="ReloadLookups" disabled="@_busy">@L["Common.Refresh"]</button>
                         </div>
 
                         <div class="row g-2 align-items-end mb-3">
                             <div class="col-12 col-md-6">
-                                <label class="form-label">المنتج</label>
-                                <select class="form-select" value="@_selectedProductId" @onchange="OnSelectedProductChanged">
-                                    <option value="">اختر...</option>
+                                <label class="form-label">@L["Sales.Product"]</label>
+                                <select class="form-select" value="@_selectedProductId" @onchange="OnSelectedProductChanged" disabled="@_busy">
+                                    <option value="">@L["Sales.Select"]</option>
                                     @foreach (var p in _products.Where(x => x.IsActive))
                                     {
                                         <option value="@p.Id">@p.Name</option>
@@ -73,8 +126,8 @@
                                 </select>
                             </div>
                             <div class="col-12 col-md-4">
-                                <label class="form-label">الوحدة</label>
-                                <select class="form-select" @bind="_selectedProductUnitId" disabled="@(string.IsNullOrWhiteSpace(_selectedProductId) || _selectedUnits.Count == 0)">
+                                <label class="form-label">@L["Sales.Unit"]</label>
+                                <select class="form-select" @bind="_selectedProductUnitId" disabled="@(_busy || string.IsNullOrWhiteSpace(_selectedProductId) || _selectedUnits.Count == 0)">
                                     <option value="">-</option>
                                     @foreach (var u in _selectedUnits.Where(x => x.IsActive))
                                     {
@@ -82,65 +135,108 @@
                                     }
                                 </select>
                             </div>
-                            <div class="col-6 col-md-1">
-                                <button class="btn btn-outline-primary w-100" @onclick="AddSelectedProduct" disabled="@(_busy || string.IsNullOrWhiteSpace(_selectedProductId))">+</button>
-                            </div>
-                            <div class="col-6 col-md-1">
-                                <button class="btn btn-outline-secondary w-100" @onclick="LoadProducts" disabled="@_busy">↻</button>
+                            <div class="col-12 col-md-2">
+                                <button class="btn btn-outline-primary w-100" @onclick="AddSelectedProduct" disabled="@(_busy || string.IsNullOrWhiteSpace(_selectedProductId))">@L["Common.Add"]</button>
                             </div>
                         </div>
 
                         <div class="d-flex gap-2 mb-3">
-                            <input class="form-control" placeholder="Barcode..." @bind="_barcode" @bind:event="oninput" @onkeydown="OnBarcodeKeyDown" autofocus />
-                            <button class="btn btn-outline-primary" @onclick="LookupAndAdd" disabled="@_busy">إضافة</button>
-                            <button class="btn btn-outline-secondary" @onclick="Clear" disabled="@_busy">مسح</button>
+                            <input class="form-control" placeholder="@L["Sales.BarcodePlaceholder"]" @bind="_barcode" @bind:event="oninput" @onkeydown="OnBarcodeKeyDown" />
+                            <button class="btn btn-outline-primary" @onclick="LookupAndAdd" disabled="@_busy">@L["Common.Add"]</button>
+                            <button class="btn btn-outline-secondary" @onclick="ClearLines" disabled="@_busy">@L["Common.Cancel"]</button>
                         </div>
 
                         <div class="table-responsive">
                             <table class="table table-sm table-striped align-middle">
                                 <thead>
                                     <tr>
-                                        <th>المنتج</th>
-                                        <th>الوحدة</th>
-                                        <th class="text-end">Qty</th>
-                                        <th class="text-end">السعر</th>
-                                        <th class="text-end">خصم</th>
-                                        <th class="text-end">الإجمالي</th>
+                                        <th class="text-end">@L["Sales.Col.Total"]</th>
+                                        <th class="text-end">@L["Sales.Col.Vat"]</th>
+                                        <th class="text-end">@L["Sales.Col.TotalBeforeVat"]</th>
+                                        <th class="text-end">@L["Sales.Col.TableTax"]</th>
+                                        <th class="text-end">@L["Sales.Col.ServiceFee"]</th>
+                                        <th class="text-end">@L["Sales.Col.AdditionalTaxes"]</th>
+                                        <th class="text-end">@L["Sales.Col.AdditionalFees"]</th>
+                                        <th class="text-end">@L["Sales.Col.Discount"]</th>
+                                        <th class="text-end">@L["Sales.Col.Qty"]</th>
+                                        <th class="text-end">@L["Sales.Col.UnitPrice"]</th>
+                                        <th>@L["Sales.Col.InternalCode"]</th>
+                                        <th>@L["Sales.Col.EgsCode"]</th>
+                                        <th>@L["Sales.Col.Product"]</th>
                                         <th></th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    @for (var i = 0; i < _cart.Count; i++)
+                                    @for (var i = 0; i < _lines.Count; i++)
                                     {
-                                        var line = _cart[i];
+                                        var line = _lines[i];
+                                        var total = LineTotal(line);
+                                        var vat = IncludedVat(total, line.TaxPercent);
+                                        var beforeVat = total - vat;
                                         <tr>
-                                            <td>@line.Name</td>
-                                            <td class="text-muted">@line.UnitName</td>
+                                            <td class="text-end">@total</td>
+                                            <td class="text-end">@vat</td>
+                                            <td class="text-end">@beforeVat</td>
+                                            <td class="text-end text-muted">0</td>
+                                            <td class="text-end text-muted">0</td>
+                                            <td class="text-end text-muted">0</td>
+                                            <td class="text-end text-muted">0</td>
                                             <td class="text-end" style="width:120px">
-                                                <input class="form-control form-control-sm text-end" type="number" step="0.001" @bind-value="line.Qty" @bind-value:event="oninput" />
+                                                <input class="form-control form-control-sm text-end" type="number" step="0.001" @bind-value="line.Discount" @bind-value:event="oninput" disabled="@_busy" />
+                                            </td>
+                                            <td class="text-end" style="width:120px">
+                                                <input class="form-control form-control-sm text-end" type="number" step="0.001" @bind-value="line.Qty" @bind-value:event="oninput" disabled="@_busy" />
                                             </td>
                                             <td class="text-end" style="width:140px">
-                                                <input class="form-control form-control-sm text-end" type="number" step="0.001" @bind-value="line.UnitPrice" @bind-value:event="oninput" />
+                                                <input class="form-control form-control-sm text-end" type="number" step="0.001" @bind-value="line.UnitPrice" @bind-value:event="oninput" disabled="@_busy" />
                                             </td>
-                                            <td class="text-end" style="width:140px">
-                                                <input class="form-control form-control-sm text-end" type="number" step="0.001" @bind-value="line.Discount" @bind-value:event="oninput" />
+                                            <td class="text-muted">@line.Sku</td>
+                                            <td class="text-muted">@line.PrimaryBarcode</td>
+                                            <td>
+                                                @line.Name
+                                                @if (!string.IsNullOrWhiteSpace(line.UnitName))
+                                                {
+                                                    <span class="text-muted small">(@line.UnitName)</span>
+                                                }
                                             </td>
-                                            <td class="text-end">@line.LineTotal</td>
-                                            <td class="text-end" style="width:90px">
-                                                <button class="btn btn-sm btn-outline-danger" @onclick="() => Remove(i)">حذف</button>
+                                            <td class="text-end" style="width:70px">
+                                                <button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveLine(i)" disabled="@_busy">x</button>
                                             </td>
                                         </tr>
                                     }
                                 </tbody>
                                 <tfoot>
                                     <tr>
-                                        <th colspan="5" class="text-end">الإجمالي</th>
-                                        <th class="text-end">@Total</th>
-                                        <th></th>
+                                        <th class="text-end">@GrandTotal</th>
+                                        <th class="text-end">@GrandVat</th>
+                                        <th class="text-end">@GrandBeforeVat</th>
+                                        <th colspan="10"></th>
                                     </tr>
                                 </tfoot>
                             </table>
                         </div>
+
+                        <div class="row g-2 mt-2">
+                            <div class="col-md-8">
+                                <label class="form-label">@L["Common.Note"] (@L["Common.Optional"])</label>
+                                <InputText class="form-control" @bind-Value="_note" />
+                            </div>
+                            <div class="col-md-4">
+                                @if (_paymentMethod == "Cash")
+                                {
+                                    <label class="form-label">@L["Sales.CashTendered"]</label>
+                                    <InputNumber class="form-control text-end" @bind-Value="_cashTendered" />
+                                    <div class="small text-muted mt-1">@L["Sales.Change"]: <strong>@Change</strong></div>
+                                }
+                                else if (_paymentMethod == "Visa" || _paymentMethod == "Bank")
+                                {
+                                    <label class="form-label">@L["Sales.ReferenceOptional"]</label>
+                                    <InputText class="form-control" @bind-Value="_referenceNo" />
+                                }
+                            </div>
+                        </div>
+
+                        <button class="btn btn-success w-100 mt-3" @onclick="SaveSale" disabled="@(_busy || _lines.Count == 0)">@L["Sales.SaveAndPay"]</button>
                     </div>
                 </div>
             </div>
@@ -148,101 +244,59 @@
             <div class="col-lg-4">
                 <div class="card">
                     <div class="card-body">
-                        <div class="fw-bold mb-2">الدفع</div>
-                        <div class="small text-muted mb-2">Total: <strong>@Total</strong></div>
-
-                        <div class="table-responsive mb-2">
-                            <table class="table table-sm align-middle">
-                                <thead>
-                                    <tr>
-                                        <th>Method</th>
-                                        <th class="text-end">Amount</th>
-                                        <th>Ref</th>
-                                        <th></th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @for (var i = 0; i < _otherPayments.Count; i++)
-                                    {
-                                        var p = _otherPayments[i];
-                                        <tr>
-                                            <td style="width:140px">
-                                                <select class="form-select form-select-sm" @bind="p.Method" disabled="@_busy">
-                                                    @foreach (var m in OtherPaymentMethods)
-                                                    {
-                                                        <option value="@m">@m</option>
-                                                    }
-                                                </select>
-                                            </td>
-                                            <td class="text-end" style="width:140px">
-                                                <input class="form-control form-control-sm text-end" type="number" step="0.001" @bind-value="p.Amount" @bind-value:event="oninput" disabled="@_busy" />
-                                            </td>
-                                            <td style="width:160px">
-                                                <input class="form-control form-control-sm" placeholder="Ref (Visa/Bank)" @bind="p.ReferenceNo" disabled="@_busy" />
-                                            </td>
-                                            <td class="text-end" style="width:60px">
-                                                <button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveOtherPayment(i)" disabled="@_busy">x</button>
-                                            </td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <div class="d-flex gap-2 mb-3">
-                            <button class="btn btn-outline-secondary flex-fill" @onclick="AddOtherPayment" disabled="@_busy">إضافة طريقة دفع</button>
-                            <button class="btn btn-outline-secondary" @onclick="FillCash" disabled="@_busy">تعبئة الكاش</button>
-                        </div>
-
-                        <div class="mb-2">
-                            <label class="form-label">Cash Applied</label>
-                            <input class="form-control text-end" value="@CashApplied" readonly />
-                        </div>
-                        <div class="mb-2">
-                            <label class="form-label">Cash Tendered</label>
-                            <input class="form-control text-end" type="number" step="0.001" @bind-value="_cashTendered" @bind-value:event="oninput" disabled="@(_busy || CashApplied == 0)" />
-                            <div class="small text-muted mt-1">Change: <strong>@Change</strong></div>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">ملاحظة (اختياري)</label>
-                            <InputText class="form-control" @bind-Value="_note" />
-                        </div>
-                        <button class="btn btn-success w-100" @onclick="Pay" disabled="@(_busy || _cart.Count == 0)">دفع</button>
+                        <div class="fw-bold mb-2">@L["Sales.Summary"]</div>
+                        <table class="table table-sm mb-0">
+                            <tbody>
+                                <tr>
+                                    <th>@L["Sales.TotalBeforeVat"]</th>
+                                    <td class="text-end">@GrandBeforeVat</td>
+                                </tr>
+                                <tr>
+                                    <th>@L["Sales.Vat"]</th>
+                                    <td class="text-end">@GrandVat</td>
+                                </tr>
+                                <tr>
+                                    <th>@L["Sales.InvoiceDiscount"]</th>
+                                    <td class="text-end" style="width: 160px;">
+                                        <InputNumber class="form-control form-control-sm text-end" @bind-Value="_invoiceDiscount" />
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th>@L["Common.Total"]</th>
+                                    <td class="text-end fw-bold">@GrandTotal</td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
         </div>
 
-        @if (_lastReceipt is not null)
+        @if (_receipt is not null)
         {
             <div class="d-none d-print-block">
-                <div style="max-width: 420px; margin: 0 auto;">
-                    <h2 class="h5 text-center mb-3">فاتورة مبيعات</h2>
-                    <div class="small text-muted mb-2">رقم: <strong>@_lastReceipt.SaleNo</strong></div>
-                    <div class="small text-muted mb-2">تاريخ: @_lastReceipt.At.LocalDateTime.ToString("yyyy-MM-dd HH:mm")</div>
-                    <div class="small text-muted mb-3">العميل: @(string.IsNullOrWhiteSpace(_lastReceipt.CustomerName) ? "-" : _lastReceipt.CustomerName)</div>
+                <div style="max-width: 520px; margin: 0 auto;">
+                    <h2 class="h5 text-center mb-3">@L["Sales.PrintTitle"]</h2>
+                    <div class="small text-muted mb-1">@L["Sales.Number"]: <strong>@_receipt.SaleNo</strong></div>
+                    <div class="small text-muted mb-1">@L["Common.Date"]: @_receipt.At.LocalDateTime.ToString("yyyy-MM-dd HH:mm")</div>
+                    <div class="small text-muted mb-1">@L["Sales.CustomerOptional"]: @(string.IsNullOrWhiteSpace(_receipt.CustomerName) ? "-" : _receipt.CustomerName)</div>
+                    <div class="small text-muted mb-2">@L["Sales.CustomerTaxRegistrationOrNationalId"]: @(string.IsNullOrWhiteSpace(_receipt.CustomerTaxRegistrationNo) ? "-" : _receipt.CustomerTaxRegistrationNo)</div>
 
                     <table class="table table-sm">
                         <thead>
                             <tr>
-                                <th>الصنف</th>
-                                <th class="text-end">Qty</th>
-                                <th class="text-end">سعر</th>
-                                <th class="text-end">خصم</th>
-                                <th class="text-end">الإجمالي</th>
+                                <th>@L["Sales.Col.Product"]</th>
+                                <th class="text-end">@L["Sales.Col.Qty"]</th>
+                                <th class="text-end">@L["Sales.Col.UnitPrice"]</th>
+                                <th class="text-end">@L["Sales.Col.Discount"]</th>
+                                <th class="text-end">@L["Common.Total"]</th>
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach (var line in _lastReceipt.Lines)
+                            @foreach (var line in _receipt.Lines)
                             {
                                 <tr>
-                                    <td>
-                                        @line.ProductName
-                                        @if (!string.IsNullOrWhiteSpace(line.UnitName))
-                                        {
-                                            <span class="text-muted small">(@line.UnitName)</span>
-                                        }
-                                    </td>
+                                    <td>@line.ProductName</td>
                                     <td class="text-end">@line.Qty</td>
                                     <td class="text-end">@line.UnitPrice</td>
                                     <td class="text-end">@line.Discount</td>
@@ -252,29 +306,28 @@
                         </tbody>
                         <tfoot>
                             <tr>
-                                <th colspan="4" class="text-end">الإجمالي</th>
-                                <th class="text-end">@_lastReceipt.Total</th>
+                                <th colspan="4" class="text-end">@L["Sales.TotalBeforeVat"]</th>
+                                <th class="text-end">@_receipt.TotalBeforeVat</th>
                             </tr>
                             <tr>
-                                <th colspan="4" class="text-end">المدفوع</th>
-                                <th class="text-end">@_lastReceipt.CashTendered</th>
+                                <th colspan="4" class="text-end">@L["Sales.Vat"]</th>
+                                <th class="text-end">@_receipt.TaxTotal</th>
                             </tr>
                             <tr>
-                                <th colspan="4" class="text-end">الباقي</th>
-                                <th class="text-end">@_lastReceipt.Change</th>
+                                <th colspan="4" class="text-end">@L["Sales.InvoiceDiscount"]</th>
+                                <th class="text-end">@_lastInvoiceDiscount</th>
+                            </tr>
+                            <tr>
+                                <th colspan="4" class="text-end">@L["Common.Total"]</th>
+                                <th class="text-end fw-bold">@_receipt.Total</th>
                             </tr>
                         </tfoot>
                     </table>
 
-                    @if (!string.IsNullOrWhiteSpace(_lastReceipt.Note))
+                    @if (!string.IsNullOrWhiteSpace(_qrSvg))
                     {
-                        <div class="small mt-2">ملاحظة: @_lastReceipt.Note</div>
-                    }
-
-                    @if (!string.IsNullOrWhiteSpace(_lastReceiptQrSvg))
-                    {
-                        <div class="receipt-qr mt-3 text-center">
-                            @((MarkupString)_lastReceiptQrSvg)
+                        <div class="mt-3 text-center">
+                            @((MarkupString)_qrSvg)
                         </div>
                     }
                 </div>
@@ -288,36 +341,39 @@
     private bool _busy;
     private string? _error;
     private string? _success;
-    private string _barcode = "";
+
+    private DateTime _atDate = DateTime.Today;
+    private string _paymentMethod = "Cash";
     private decimal _cashTendered;
+    private string? _referenceNo;
     private string? _note;
+    private decimal _invoiceDiscount;
+    private decimal _lastInvoiceDiscount;
+    private string? _saleIdempotencyKey;
+
     private string _customerId = "";
+    private string? _customerName;
+    private string? _customerTaxRegistrationNo;
+
+    private string _barcode = "";
 
     private List<ProductOption> _products = [];
     private List<CustomerOption> _customers = [];
     private readonly Dictionary<Guid, List<UnitOption>> _unitsByProductId = [];
+    private readonly Dictionary<Guid, decimal> _taxPercentByRateId = [];
+
     private string _selectedProductId = "";
     private string _selectedProductUnitId = "";
     private List<UnitOption> _selectedUnits = [];
 
-    private readonly List<CartLine> _cart = [];
-    private SaleReceipt? _lastReceipt;
-    private string? _lastReceiptQrSvg;
+    private readonly List<CartLine> _lines = [];
+    private SaleReceipt? _receipt;
+    private string? _qrSvg;
 
-    private decimal Total => _cart.Sum(x => x.LineTotal);
-    private decimal OtherTotal => _otherPayments.Sum(x => x.Amount);
-    private decimal CashApplied => Math.Max(Total - OtherTotal, 0);
-    private decimal Change => _cashTendered <= CashApplied ? 0 : (_cashTendered - CashApplied);
-
-    private List<OtherPaymentLine> _otherPayments = [];
-
-    private static readonly string[] OtherPaymentMethods = ["Visa", "Bank", "OnAccount"];
-
-    protected override Task OnInitializedAsync()
-    {
-        _cashTendered = 0;
-        return Task.CompletedTask;
-    }
+    private decimal GrandTotal => ComputeTotals(_invoiceDiscount).Total;
+    private decimal GrandVat => ComputeTotals(_invoiceDiscount).Vat;
+    private decimal GrandBeforeVat => ComputeTotals(_invoiceDiscount).BeforeVat;
+    private decimal Change => _paymentMethod == "Cash" && _cashTendered > GrandTotal ? decimal.Round(_cashTendered - GrandTotal, 3, MidpointRounding.AwayFromZero) : 0m;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -328,21 +384,30 @@
 
         await Session.EnsureLoadedAsync();
         _ready = true;
-        if (Session.IsLoggedIn)
+
+        if (Session.IsLoggedIn && Session.HasPermission(PermissionKeys.SalesCreate))
         {
-            await LoadProducts();
-            await LoadCustomers();
+            await ReloadLookups();
         }
+
         StateHasChanged();
     }
 
-    private async Task LoadProducts()
+    private async Task ReloadLookups()
     {
         _error = null;
         _busy = true;
         try
         {
             _products = await Api.GetAsync<List<ProductOption>>("catalog/products");
+            _customers = await Api.GetAsync<List<CustomerOption>>("customers");
+            var rates = await Api.GetAsync<List<TaxRateOption>>("taxes/rates");
+
+            _taxPercentByRateId.Clear();
+            foreach (var r in rates)
+            {
+                _taxPercentByRateId[r.Id] = r.Percent;
+            }
         }
         catch (ApiUnauthorizedException ex)
         {
@@ -362,29 +427,58 @@
         }
     }
 
-    private async Task LoadCustomers()
+    private void OnPaymentMethodChanged()
     {
-        _error = null;
-        _busy = true;
+        _cashTendered = _paymentMethod == "Cash" ? GrandTotal : 0;
+    }
+
+    private void OnCustomerChanged()
+    {
+        if (!Guid.TryParse(_customerId, out var id) || id == Guid.Empty)
+        {
+            return;
+        }
+
+        var c = _customers.SingleOrDefault(x => x.Id == id);
+        if (c is null)
+        {
+            return;
+        }
+
+        _customerName = c.Name;
+        _customerTaxRegistrationNo = c.TaxRegistrationNo;
+    }
+
+    private async Task OnSelectedProductChanged(ChangeEventArgs e)
+    {
+        _selectedProductId = e.Value?.ToString() ?? "";
+        _selectedProductUnitId = "";
+        _selectedUnits = [];
+
+        if (!Guid.TryParse(_selectedProductId, out var productId) || productId == Guid.Empty)
+        {
+            return;
+        }
+
+        if (_unitsByProductId.TryGetValue(productId, out var cached))
+        {
+            _selectedUnits = cached;
+            var def = cached.FirstOrDefault(x => x.IsDefault);
+            _selectedProductUnitId = def is null ? "" : def.Id.ToString();
+            return;
+        }
+
         try
         {
-            _customers = await Api.GetAsync<List<CustomerOption>>("customers");
+            var units = await Api.GetAsync<List<UnitOption>>($"catalog/products/{productId}/units");
+            _unitsByProductId[productId] = units;
+            _selectedUnits = units;
+            var def = units.FirstOrDefault(x => x.IsDefault);
+            _selectedProductUnitId = def is null ? "" : def.Id.ToString();
         }
-        catch (ApiUnauthorizedException ex)
+        catch
         {
-            if (ex.WasAuthenticated)
-            {
-                await Session.ClearAsync();
-            }
-            RedirectToLogin();
-        }
-        catch (ApiHttpException ex)
-        {
-            _error = string.IsNullOrWhiteSpace(ex.Body) ? ex.Message : ex.Body;
-        }
-        finally
-        {
-            _busy = false;
+            _selectedUnits = [];
         }
     }
 
@@ -398,42 +492,56 @@
             return;
         }
 
-        var product = _products.SingleOrDefault(x => x.Id == productId);
-        if (product is null)
+        var p = _products.SingleOrDefault(x => x.Id == productId);
+        if (p is null)
         {
             return;
         }
 
-        Guid? unitId = null;
-        string? unitName = null;
-        var unitFactor = 1m;
-        if (!string.IsNullOrWhiteSpace(_selectedProductUnitId) &&
-            Guid.TryParse(_selectedProductUnitId, out var parsedUnitId) &&
-            parsedUnitId != Guid.Empty)
+        var (unitId, unitName, unitFactor) = GetSelectedUnit();
+        var price = decimal.Round(p.Price * unitFactor, 3, MidpointRounding.AwayFromZero);
+
+        var taxPercent = 0m;
+        if (p.TaxRateId is not null && _taxPercentByRateId.TryGetValue(p.TaxRateId.Value, out var percent))
         {
-            unitId = parsedUnitId;
-            var unit = _selectedUnits.SingleOrDefault(x => x.Id == parsedUnitId);
-            if (unit is not null)
-            {
-                unitName = unit.Name;
-                unitFactor = unit.Factor <= 0 ? 1m : unit.Factor;
-            }
+            taxPercent = percent;
         }
 
-        var existing = _cart.SingleOrDefault(x => x.ProductId == product.Id && x.ProductUnitId == unitId);
-        if (existing is not null)
+        _lines.Add(new CartLine
         {
-            existing.Qty += 1;
-        }
-        else
-        {
-            _cart.Add(new CartLine(product.Id, product.Name, unitId, unitName, unitFactor, 1, product.Price * unitFactor, 0));
-        }
+            ProductId = p.Id,
+            Name = p.Name,
+            Sku = p.Sku,
+            PrimaryBarcode = p.PrimaryBarcode,
+            ProductUnitId = unitId,
+            UnitName = unitName,
+            UnitFactor = unitFactor,
+            Qty = 1m,
+            UnitPrice = price,
+            Discount = p.DefaultDiscount,
+            TaxPercent = taxPercent
+        });
 
         _selectedProductId = "";
         _selectedProductUnitId = "";
         _selectedUnits = [];
-        FillCash();
+        _cashTendered = _paymentMethod == "Cash" ? GrandTotal : 0;
+    }
+
+    private (Guid? UnitId, string? UnitName, decimal UnitFactor) GetSelectedUnit()
+    {
+        if (!string.IsNullOrWhiteSpace(_selectedProductUnitId) &&
+            Guid.TryParse(_selectedProductUnitId, out var unitId) &&
+            unitId != Guid.Empty)
+        {
+            var unit = _selectedUnits.SingleOrDefault(x => x.Id == unitId);
+            if (unit is not null)
+            {
+                return (unitId, unit.Name, unit.Factor <= 0 ? 1m : unit.Factor);
+            }
+        }
+
+        return (null, null, 1m);
     }
 
     private async Task OnBarcodeKeyDown(KeyboardEventArgs e)
@@ -448,6 +556,7 @@
     {
         _success = null;
         _error = null;
+
         var code = _barcode.Trim();
         if (string.IsNullOrWhiteSpace(code))
         {
@@ -458,19 +567,43 @@
         try
         {
             var item = await Api.GetAsync<BarcodeLookup>($"catalog/lookup/barcode/{Uri.EscapeDataString(code)}");
-            var (unitId, unitName, unitFactor) = await GetDefaultUnitAsync(item.ProductId);
-            var existing = _cart.SingleOrDefault(x => x.ProductId == item.ProductId && x.ProductUnitId == unitId);
-            if (existing is not null)
+            var p = _products.SingleOrDefault(x => x.Id == item.ProductId);
+            if (p is null)
             {
-                existing.Qty += 1;
-            }
-            else
-            {
-                _cart.Add(new CartLine(item.ProductId, item.Name, unitId, unitName, unitFactor, 1, item.Price * unitFactor, 0));
+                _error = L["Sales.BarcodeNotFound"].Value;
+                return;
             }
 
+            var units = await GetUnitsAsync(item.ProductId);
+            var def = units.FirstOrDefault(x => x.IsDefault);
+            var unitId = def?.Id;
+            var unitName = def?.Name;
+            var unitFactor = def?.Factor <= 0 ? 1m : def?.Factor ?? 1m;
+            var price = decimal.Round(p.Price * unitFactor, 3, MidpointRounding.AwayFromZero);
+
+            var taxPercent = 0m;
+            if (p.TaxRateId is not null && _taxPercentByRateId.TryGetValue(p.TaxRateId.Value, out var percent))
+            {
+                taxPercent = percent;
+            }
+
+            _lines.Add(new CartLine
+            {
+                ProductId = p.Id,
+                Name = p.Name,
+                Sku = p.Sku,
+                PrimaryBarcode = p.PrimaryBarcode,
+                ProductUnitId = unitId,
+                UnitName = unitName,
+                UnitFactor = unitFactor,
+                Qty = 1m,
+                UnitPrice = price,
+                Discount = p.DefaultDiscount,
+                TaxPercent = taxPercent
+            });
+
             _barcode = "";
-            FillCash();
+            _cashTendered = _paymentMethod == "Cash" ? GrandTotal : 0;
         }
         catch (ApiUnauthorizedException ex)
         {
@@ -486,7 +619,7 @@
         }
         catch
         {
-            _error = "Barcode غير موجود.";
+            _error = L["Sales.BarcodeNotFound"].Value;
         }
         finally
         {
@@ -494,182 +627,290 @@
         }
     }
 
-    private void Remove(int index)
+    private async Task<List<UnitOption>> GetUnitsAsync(Guid productId)
     {
-        _cart.RemoveAt(index);
-        FillCash();
+        if (_unitsByProductId.TryGetValue(productId, out var cached))
+        {
+            return cached;
+        }
+
+        var units = await Api.GetAsync<List<UnitOption>>($"catalog/products/{productId}/units");
+        _unitsByProductId[productId] = units;
+        return units;
     }
 
-    private void AddOtherPayment()
+    private void RemoveLine(int index)
     {
-        _otherPayments.Add(new OtherPaymentLine());
-        FillCash();
-    }
-
-    private void RemoveOtherPayment(int index)
-    {
-        if (index < 0 || index >= _otherPayments.Count)
+        if (index < 0 || index >= _lines.Count)
         {
             return;
         }
 
-        _otherPayments.RemoveAt(index);
-        FillCash();
+        _lines.RemoveAt(index);
+        _cashTendered = _paymentMethod == "Cash" ? GrandTotal : 0;
     }
 
-    private void FillCash()
+    private void ClearLines()
     {
-        if (CashApplied <= 0)
-        {
-            _cashTendered = 0;
-            return;
-        }
-
-        if (_cashTendered <= 0 || _cashTendered < CashApplied)
-        {
-            _cashTendered = CashApplied;
-        }
-    }
-
-    private void Clear()
-    {
-        _cart.Clear();
-        _otherPayments.Clear();
+        _lines.Clear();
+        _barcode = "";
+        _receipt = null;
+        _qrSvg = null;
         _cashTendered = 0;
-        _note = null;
-        _error = null;
     }
 
-    private async Task Pay()
+    private void ClearCartOnly()
+    {
+        _lines.Clear();
+        _barcode = "";
+        _cashTendered = 0;
+    }
+
+    private (decimal Total, decimal Vat, decimal BeforeVat) ComputeTotals(decimal invoiceDiscount)
+    {
+        if (_lines.Count == 0)
+        {
+            return (0m, 0m, 0m);
+        }
+
+        var lineTotals = _lines.Select(LineTotal).ToArray();
+        var discount = invoiceDiscount < 0 ? 0m : decimal.Round(invoiceDiscount, 3, MidpointRounding.AwayFromZero);
+        var shares = AllocateDiscountShares(lineTotals, discount);
+
+        decimal total = 0;
+        decimal vat = 0;
+        for (var i = 0; i < _lines.Count; i++)
+        {
+            var adj = decimal.Round(lineTotals[i] - shares[i], 3, MidpointRounding.AwayFromZero);
+            if (adj < 0)
+            {
+                adj = 0;
+            }
+
+            total += adj;
+            vat += IncludedVat(adj, _lines[i].TaxPercent);
+        }
+
+        total = decimal.Round(total, 3, MidpointRounding.AwayFromZero);
+        vat = decimal.Round(vat, 3, MidpointRounding.AwayFromZero);
+        var beforeVat = decimal.Round(total - vat, 3, MidpointRounding.AwayFromZero);
+        return (total, vat, beforeVat);
+    }
+
+    private static decimal[] AllocateDiscountShares(IReadOnlyList<decimal> lineTotals, decimal invoiceDiscount)
+    {
+        var n = lineTotals.Count;
+        var shares = new decimal[n];
+        if (n == 0 || invoiceDiscount <= 0)
+        {
+            return shares;
+        }
+
+        var weights = new decimal[n];
+        decimal sum = 0;
+        for (var i = 0; i < n; i++)
+        {
+            var w = lineTotals[i];
+            if (w < 0)
+            {
+                w = 0;
+            }
+
+            w = decimal.Round(w, 3, MidpointRounding.AwayFromZero);
+            weights[i] = w;
+            sum += w;
+        }
+
+        sum = decimal.Round(sum, 3, MidpointRounding.AwayFromZero);
+        if (sum <= 0)
+        {
+            return shares;
+        }
+
+        invoiceDiscount = decimal.Round(invoiceDiscount, 3, MidpointRounding.AwayFromZero);
+        if (invoiceDiscount > sum)
+        {
+            invoiceDiscount = sum;
+        }
+
+        decimal remaining = invoiceDiscount;
+
+        for (var i = 0; i < n - 1; i++)
+        {
+            var w = weights[i];
+            if (w <= 0 || remaining <= 0)
+            {
+                continue;
+            }
+
+            var raw = invoiceDiscount * w / sum;
+            var share = decimal.Round(raw, 3, MidpointRounding.AwayFromZero);
+            if (share > w)
+            {
+                share = w;
+            }
+
+            if (share > remaining)
+            {
+                share = remaining;
+            }
+
+            shares[i] = share;
+            remaining = decimal.Round(remaining - share, 3, MidpointRounding.AwayFromZero);
+        }
+
+        if (remaining > 0)
+        {
+            for (var i = n - 1; i >= 0 && remaining > 0; i--)
+            {
+                var cap = weights[i] - shares[i];
+                if (cap <= 0)
+                {
+                    continue;
+                }
+
+                var add = remaining > cap ? cap : remaining;
+                add = decimal.Round(add, 3, MidpointRounding.AwayFromZero);
+                shares[i] = decimal.Round(shares[i] + add, 3, MidpointRounding.AwayFromZero);
+                remaining = decimal.Round(remaining - add, 3, MidpointRounding.AwayFromZero);
+            }
+        }
+
+        return shares;
+    }
+
+    private async Task SaveSale()
     {
         _success = null;
         _error = null;
 
-        if (_cart.Count == 0)
+        if (_lines.Count == 0)
         {
             return;
         }
 
-        foreach (var line in _cart)
+        foreach (var l in _lines)
         {
-            if (line.Qty <= 0 || line.UnitPrice < 0 || line.Discount < 0 || line.LineTotal < 0)
+            if (l.Qty <= 0 || l.UnitPrice < 0 || l.Discount < 0 || LineTotal(l) < 0)
             {
-                _error = "سطر غير صحيح.";
+                _error = L["Sales.InvalidLine"].Value;
                 return;
             }
         }
 
-        var total = Total;
-        if (total <= 0)
+        var lineTotals = _lines.Select(LineTotal).ToArray();
+        var maxDiscount = decimal.Round(lineTotals.Sum(), 3, MidpointRounding.AwayFromZero);
+        var invoiceDiscount = _invoiceDiscount < 0 ? 0m : decimal.Round(_invoiceDiscount, 3, MidpointRounding.AwayFromZero);
+        if (invoiceDiscount > maxDiscount)
         {
-            _error = "الإجمالي غير صحيح.";
+            _error = $"{L["Sales.InvoiceDiscount"].Value} > {maxDiscount}";
             return;
         }
 
-        if (CashApplied > 0 && _cashTendered < CashApplied)
+        if (GrandTotal <= 0)
         {
-            _error = "Cash أقل من الإجمالي.";
+            _error = L["Sales.InvalidTotal"].Value;
             return;
+        }
+
+        if (_paymentMethod == "Cash" && _cashTendered < GrandTotal)
+        {
+            _cashTendered = GrandTotal;
         }
 
         Guid? customerId = null;
-        string? customerName = null;
-        if (!string.IsNullOrWhiteSpace(_customerId) && Guid.TryParse(_customerId, out var parsedCustomerId) && parsedCustomerId != Guid.Empty)
+        if (Guid.TryParse(_customerId, out var cid) && cid != Guid.Empty)
         {
-            customerId = parsedCustomerId;
-            customerName = _customers.SingleOrDefault(x => x.Id == parsedCustomerId)?.Name;
+            customerId = cid;
         }
 
-        if (_otherPayments.Any(x => x.Amount < 0))
+        if (_paymentMethod == "OnAccount" && customerId is null)
         {
-            _error = "Invalid payment amount.";
+            _error = L["Sales.CustomerRequiredForOnAccount"].Value;
             return;
         }
 
-        if (OtherTotal > total)
+        var payments = new List<PaymentRequest>();
+        if (_paymentMethod == "Cash")
         {
-            _error = "Payments exceed total.";
-            return;
+            payments.Add(new PaymentRequest { Method = "Cash", Amount = _cashTendered <= 0 ? GrandTotal : _cashTendered });
+        }
+        else if (_paymentMethod == "Visa" || _paymentMethod == "Bank")
+        {
+            payments.Add(new PaymentRequest { Method = _paymentMethod, Amount = GrandTotal, ReferenceNo = _referenceNo });
+        }
+        else
+        {
+            payments.Add(new PaymentRequest { Method = "OnAccount", Amount = GrandTotal });
         }
 
-        if (_otherPayments.Any(x => x.Amount > 0 && string.Equals(x.Method, "OnAccount", StringComparison.OrdinalIgnoreCase)) && customerId is null)
+        var shares = AllocateDiscountShares(lineTotals, invoiceDiscount);
+
+        var request = new CreateSaleRequest
         {
-            _error = "OnAccount requires customer.";
-            return;
-        }
+            BranchId = Session.BranchId,
+            CustomerId = customerId,
+            Items = _lines.Select((x, i) => new SaleItemRequest
+            {
+                ProductId = x.ProductId,
+                ProductUnitId = x.ProductUnitId,
+                Qty = x.Qty,
+                UnitPrice = x.UnitPrice,
+                Discount = x.Discount + shares[i]
+            }).ToList(),
+            Payments = payments,
+            Note = string.IsNullOrWhiteSpace(_note) ? null : _note.Trim(),
+            CustomerName = string.IsNullOrWhiteSpace(_customerName) ? null : _customerName.Trim(),
+            CustomerTaxRegistrationNo = string.IsNullOrWhiteSpace(_customerTaxRegistrationNo) ? null : _customerTaxRegistrationNo.Trim(),
+            CustomerAddress = null,
+            At = new DateTimeOffset(_atDate, TimeZoneInfo.Local.GetUtcOffset(_atDate))
+        };
 
         _busy = true;
         try
         {
-            var idempotencyKey = Guid.NewGuid().ToString();
-
-            var payments = new List<object>();
-            foreach (var p in _otherPayments.Where(x => x.Amount > 0))
+            _saleIdempotencyKey ??= Guid.NewGuid().ToString();
+            var response = await Api.PostAsync("pos/sales", request, new Dictionary<string, string>
             {
-                payments.Add(new
-                {
-                    method = p.Method,
-                    amount = p.Amount,
-                    referenceNo = string.IsNullOrWhiteSpace(p.ReferenceNo) ? null : p.ReferenceNo
-                });
-            }
-
-            if (CashApplied > 0)
-            {
-                payments.Add(new { method = "Cash", amount = CashApplied, referenceNo = (string?)null });
-            }
-
-            var response = await Api.PostAsync("pos/sales", new
-            {
-                branchId = Session.BranchId,
-                customerId,
-                items = _cart.Select(x => new
-                {
-                    productId = x.ProductId,
-                    productUnitId = x.ProductUnitId,
-                    qty = x.Qty,
-                    unitPrice = x.UnitPrice,
-                    discount = x.Discount
-                }).ToArray(),
-                payments,
-                note = string.IsNullOrWhiteSpace(_note) ? null : _note
-            }, new Dictionary<string, string>
-            {
-                ["Idempotency-Key"] = idempotencyKey
+                ["Idempotency-Key"] = _saleIdempotencyKey
             });
-
             if (!response.IsSuccessStatusCode)
             {
                 _error = await response.Content.ReadAsStringAsync();
                 return;
             }
 
-            var body = await response.Content.ReadFromJsonAsync<CreateSaleResponse>(new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
-            _success = $"تم تسجيل المبيعات: {body?.SaleNo}";
-            var saleNo = body?.SaleNo ?? "";
-            var at = DateTimeOffset.Now;
-            _lastReceipt = new SaleReceipt(
-                saleNo,
-                at,
-                customerName,
-                _cart.Select(x => new SaleReceiptLine(x.Name, x.UnitName, x.Qty, x.UnitPrice, x.Discount)).ToList(),
-                total,
-                CashApplied,
-                _cashTendered,
-                string.IsNullOrWhiteSpace(_note) ? null : _note);
-
-            try
+            var created = await response.Content.ReadFromJsonAsync<CreateSaleResponse>();
+            if (created is null || created.SaleId == Guid.Empty)
             {
-                var qrText = $"SALE|{saleNo}|{at:O}|{total:0.###}";
-                var qr = QrCode.EncodeText(qrText, QrCode.Ecc.Medium);
-                _lastReceiptQrSvg = qr.ToSvgString(4);
-            }
-            catch
-            {
-                _lastReceiptQrSvg = null;
+                _error = "Invalid response.";
+                return;
             }
 
-            Clear();
+            var details = await Api.GetAsync<SaleDetailsResponse>($"pos/sales/{created.SaleId}");
+            _receipt = SaleReceipt.From(details);
+            _qrSvg = BuildQrSvg(details);
+            _success = $"{L["Common.Added"]} {details.SaleNo}";
+            _lastInvoiceDiscount = invoiceDiscount;
+            _saleIdempotencyKey = null;
+            _invoiceDiscount = 0;
+            ClearCartOnly();
+        }
+        catch (ApiUnauthorizedException ex)
+        {
+            if (ex.WasAuthenticated)
+            {
+                await Session.ClearAsync();
+            }
+            RedirectToLogin();
+        }
+        catch (ApiHttpException ex)
+        {
+            _error = string.IsNullOrWhiteSpace(ex.Body) ? ex.Message : ex.Body;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
         }
         finally
         {
@@ -677,54 +918,71 @@
         }
     }
 
-    private async Task PrintLast()
+    private static decimal LineTotal(CartLine line)
+        => decimal.Round((line.Qty * line.UnitPrice) - line.Discount, 3, MidpointRounding.AwayFromZero);
+
+    private static decimal IncludedVat(decimal total, decimal taxPercent)
     {
-        if (_lastReceipt is null)
+        if (taxPercent <= 0)
         {
-            return;
+            return 0m;
         }
 
-        await JS.InvokeVoidAsync("window.print");
+        var rate = taxPercent > 1 ? (taxPercent / 100m) : taxPercent;
+        var baseAmount = total / (1m + rate);
+        return decimal.Round(total - baseAmount, 3, MidpointRounding.AwayFromZero);
+    }
+
+    private string? BuildQrSvg(SaleDetailsResponse sale)
+    {
+        try
+        {
+            var payload = $"SaleNo={sale.SaleNo};At={sale.At:O};Total={sale.Total};VAT={sale.TaxTotal}";
+            var qr = QrCode.EncodeText(payload, QrCode.Ecc.Medium);
+            return qr.ToSvgString(2);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private void Print()
+    {
+        JS.InvokeVoidAsync("window.print");
+    }
+
+    private void RedirectToLogin()
+    {
+        var relative = Nav.ToBaseRelativePath(Nav.Uri);
+        var target = string.IsNullOrWhiteSpace(relative) ? "/login" : $"/login?return=/{Uri.EscapeDataString(relative)}";
+        Nav.NavigateTo(target);
     }
 
     private sealed class CartLine
     {
-        public CartLine(Guid productId, string name, Guid? productUnitId, string? unitName, decimal unitFactor, decimal qty, decimal unitPrice, decimal discount)
-        {
-            ProductId = productId;
-            Name = name;
-            ProductUnitId = productUnitId;
-            UnitName = unitName;
-            UnitFactor = unitFactor;
-            Qty = qty;
-            UnitPrice = unitPrice;
-            Discount = discount;
-        }
-
-        public Guid ProductId { get; }
-        public string Name { get; }
-        public Guid? ProductUnitId { get; }
-        public string? UnitName { get; }
-        public decimal UnitFactor { get; }
+        public Guid ProductId { get; set; }
+        public string Name { get; set; } = "";
+        public string? Sku { get; set; }
+        public string? PrimaryBarcode { get; set; }
+        public Guid? ProductUnitId { get; set; }
+        public string? UnitName { get; set; }
+        public decimal UnitFactor { get; set; }
         public decimal Qty { get; set; }
         public decimal UnitPrice { get; set; }
         public decimal Discount { get; set; }
-        public decimal LineTotal => (Qty * UnitPrice) - Discount;
-    }
-
-    private sealed class BarcodeLookup
-    {
-        public Guid ProductId { get; set; }
-        public string Name { get; set; } = "";
-        public decimal Price { get; set; }
-        public string Barcode { get; set; } = "";
+        public decimal TaxPercent { get; set; }
     }
 
     private sealed class ProductOption
     {
         public Guid Id { get; set; }
         public string Name { get; set; } = "";
+        public string? Sku { get; set; }
+        public string? PrimaryBarcode { get; set; }
+        public Guid? TaxRateId { get; set; }
         public decimal Price { get; set; }
+        public decimal DefaultDiscount { get; set; }
         public bool IsActive { get; set; }
     }
 
@@ -733,99 +991,62 @@
         public Guid Id { get; set; }
         public string Name { get; set; } = "";
         public bool IsActive { get; set; }
+        public string? TaxRegistrationNo { get; set; }
+        public string? Country { get; set; }
+        public string? Governorate { get; set; }
+        public string? City { get; set; }
+        public string? BuildingNo { get; set; }
+        public string? Floor { get; set; }
+        public string? Apartment { get; set; }
+        public string? StreetName { get; set; }
+        public string? PostalCode { get; set; }
     }
 
     private sealed class UnitOption
     {
         public Guid Id { get; set; }
-        public Guid ProductId { get; set; }
         public string Name { get; set; } = "";
         public decimal Factor { get; set; }
         public bool IsDefault { get; set; }
         public bool IsActive { get; set; }
     }
 
-    private async Task OnSelectedProductChanged(ChangeEventArgs e)
+    private sealed class TaxRateOption
     {
-        _selectedProductId = e.Value?.ToString() ?? "";
-        _selectedProductUnitId = "";
-        _selectedUnits = [];
-
-        if (!Guid.TryParse(_selectedProductId, out var productId) || productId == Guid.Empty)
-        {
-            return;
-        }
-
-        _busy = true;
-        try
-        {
-            if (!_unitsByProductId.TryGetValue(productId, out var units))
-            {
-                units = await Api.GetAsync<List<UnitOption>>($"catalog/products/{productId}/units");
-                _unitsByProductId[productId] = units;
-            }
-
-            _selectedUnits = units;
-            var def = units.FirstOrDefault(x => x.IsDefault && x.IsActive) ?? units.FirstOrDefault(x => x.IsActive);
-            _selectedProductUnitId = def?.Id.ToString() ?? "";
-        }
-        catch
-        {
-            _selectedUnits = [];
-            _selectedProductUnitId = "";
-        }
-        finally
-        {
-            _busy = false;
-        }
+        public Guid Id { get; set; }
+        public decimal Percent { get; set; }
     }
 
-    private async Task<(Guid? UnitId, string? UnitName, decimal UnitFactor)> GetDefaultUnitAsync(Guid productId)
+    private sealed class BarcodeLookup
     {
-        if (!_unitsByProductId.TryGetValue(productId, out var units))
-        {
-            try
-            {
-                units = await Api.GetAsync<List<UnitOption>>($"catalog/products/{productId}/units");
-                _unitsByProductId[productId] = units;
-            }
-            catch
-            {
-                return (null, null, 1m);
-            }
-        }
-
-        var def = units.FirstOrDefault(x => x.IsDefault && x.IsActive) ?? units.FirstOrDefault(x => x.IsActive);
-        if (def is null)
-        {
-            return (null, null, 1m);
-        }
-
-        return (def.Id, def.Name, def.Factor <= 0 ? 1m : def.Factor);
+        public Guid ProductId { get; set; }
     }
 
-    private sealed record SaleReceipt(
-        string SaleNo,
-        DateTimeOffset At,
-        string? CustomerName,
-        List<SaleReceiptLine> Lines,
-        decimal Total,
-        decimal CashApplied,
-        decimal CashTendered,
-        string? Note
-    )
+    private sealed class CreateSaleRequest
     {
-        public decimal Change => CashTendered <= CashApplied ? 0 : (CashTendered - CashApplied);
+        public Guid BranchId { get; set; }
+        public Guid? CustomerId { get; set; }
+        public List<SaleItemRequest> Items { get; set; } = [];
+        public List<PaymentRequest> Payments { get; set; } = [];
+        public string? Note { get; set; }
+        public string? CustomerName { get; set; }
+        public string? CustomerTaxRegistrationNo { get; set; }
+        public string? CustomerAddress { get; set; }
+        public DateTimeOffset? At { get; set; }
     }
 
-    private sealed record SaleReceiptLine(string ProductName, string? UnitName, decimal Qty, decimal UnitPrice, decimal Discount)
+    private sealed class SaleItemRequest
     {
-        public decimal LineTotal => (Qty * UnitPrice) - Discount;
+        public Guid ProductId { get; set; }
+        public Guid? ProductUnitId { get; set; }
+        public decimal Qty { get; set; }
+        public decimal UnitPrice { get; set; }
+        public decimal Discount { get; set; }
     }
 
-    private sealed class OtherPaymentLine
+    private sealed class PaymentRequest
     {
-        public string Method { get; set; } = OtherPaymentMethods[0];
+        public string Method { get; set; } = "";
         public decimal Amount { get; set; }
         public string? ReferenceNo { get; set; }
     }
@@ -833,14 +1054,75 @@
     private sealed class CreateSaleResponse
     {
         public Guid SaleId { get; set; }
-        public string SaleNo { get; set; } = "";
-        public decimal Total { get; set; }
     }
 
-    private void RedirectToLogin()
+    private sealed class SaleDetailsResponse
     {
-        var relative = Nav.ToBaseRelativePath(Nav.Uri);
-        var target = string.IsNullOrWhiteSpace(relative) ? "/login" : $"/login?return=/{Uri.EscapeDataString(relative)}";
-        Nav.NavigateTo(target);
+        public Guid SaleId { get; set; }
+        public string SaleNo { get; set; } = "";
+        public DateTimeOffset At { get; set; }
+        public decimal Total { get; set; }
+        public decimal TaxTotal { get; set; }
+        public string? CustomerName { get; set; }
+        public string? CustomerTaxRegistrationNo { get; set; }
+        public string? CustomerAddress { get; set; }
+        public List<SaleDetailsLine> Items { get; set; } = [];
+    }
+
+    private sealed class SaleDetailsLine
+    {
+        public string ProductName { get; set; } = "";
+        public decimal Qty { get; set; }
+        public decimal UnitPrice { get; set; }
+        public decimal Discount { get; set; }
+        public decimal LineTotal { get; set; }
+    }
+
+    private sealed class SaleReceipt
+    {
+        public Guid SaleId { get; set; }
+        public string SaleNo { get; set; } = "";
+        public DateTimeOffset At { get; set; }
+        public decimal Total { get; set; }
+        public decimal TaxTotal { get; set; }
+        public decimal TotalBeforeVat { get; set; }
+        public string? CustomerName { get; set; }
+        public string? CustomerTaxRegistrationNo { get; set; }
+        public string? CustomerAddress { get; set; }
+        public string? Note { get; set; }
+        public List<SaleReceiptLine> Lines { get; set; } = [];
+
+        public static SaleReceipt From(SaleDetailsResponse d)
+        {
+            return new SaleReceipt
+            {
+                SaleId = d.SaleId,
+                SaleNo = d.SaleNo,
+                At = d.At,
+                Total = d.Total,
+                TaxTotal = d.TaxTotal,
+                TotalBeforeVat = decimal.Round(d.Total - d.TaxTotal, 3, MidpointRounding.AwayFromZero),
+                CustomerName = d.CustomerName,
+                CustomerTaxRegistrationNo = d.CustomerTaxRegistrationNo,
+                CustomerAddress = d.CustomerAddress,
+                Lines = d.Items.Select(x => new SaleReceiptLine
+                {
+                    ProductName = x.ProductName,
+                    Qty = x.Qty,
+                    UnitPrice = x.UnitPrice,
+                    Discount = x.Discount,
+                    LineTotal = x.LineTotal
+                }).ToList()
+            };
+        }
+    }
+
+    private sealed class SaleReceiptLine
+    {
+        public string ProductName { get; set; } = "";
+        public decimal Qty { get; set; }
+        public decimal UnitPrice { get; set; }
+        public decimal Discount { get; set; }
+        public decimal LineTotal { get; set; }
     }
 }

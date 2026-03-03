@@ -238,7 +238,7 @@ public sealed class TaxesController(AppDbContext db) : ControllerBase
 
     [HttpGet("report")]
     [RequirePermission(PermissionKeys.TaxesView)]
-    public async Task<ActionResult<TaxReportResponse>> GetTaxReport([FromQuery] Guid? branchId, [FromQuery] DateTimeOffset? from, [FromQuery] DateTimeOffset? to, CancellationToken ct)
+    public async Task<ActionResult<TaxSummaryResponse>> GetTaxReport([FromQuery] Guid? branchId, [FromQuery] DateTimeOffset? from, [FromQuery] DateTimeOffset? to, CancellationToken ct)
     {
         var tenantId = db.TenantId;
         if (tenantId == Guid.Empty)
@@ -280,6 +280,6 @@ public sealed class TaxesController(AppDbContext db) : ControllerBase
         var netSalesTax = salesTax - returnsTax;
         var net = netSalesTax - purchaseTax;
 
-        return Ok(new TaxReportResponse(fromUtc, toUtc, branchId, netSalesTax, purchaseTax, net));
+        return Ok(new TaxSummaryResponse(fromUtc, toUtc, branchId, netSalesTax, purchaseTax, net));
     }
 }

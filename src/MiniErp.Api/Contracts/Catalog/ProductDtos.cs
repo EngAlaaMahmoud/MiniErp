@@ -10,7 +10,12 @@ public sealed record ProductListItem(
     Guid? TaxRateId,
     Guid? SalesTaxTypeId,
     decimal ReorderLevel,
-    bool IsActive
+    bool IsActive,
+    string? PrimaryBarcode = null,
+    string? BrandName = null,
+    string? Description = null,
+    decimal DefaultDiscount = 0m,
+    string? DefaultUnitName = null
 );
 
 public sealed record CreateProductRequest(
@@ -22,7 +27,11 @@ public sealed record CreateProductRequest(
     Guid? TaxRateId,
     Guid? SalesTaxTypeId,
     decimal ReorderLevel,
-    bool IsActive
+    bool IsActive,
+    string? BrandName = null,
+    string? Description = null,
+    decimal DefaultDiscount = 0m,
+    string? DefaultUnitName = null
 );
 
 public sealed record UpdateProductRequest(
@@ -34,7 +43,11 @@ public sealed record UpdateProductRequest(
     Guid? TaxRateId,
     Guid? SalesTaxTypeId,
     decimal ReorderLevel,
-    bool IsActive
+    bool IsActive,
+    string? BrandName = null,
+    string? Description = null,
+    decimal DefaultDiscount = 0m,
+    string? DefaultUnitName = null
 );
 
 public sealed record AddBarcodeRequest(string Code);

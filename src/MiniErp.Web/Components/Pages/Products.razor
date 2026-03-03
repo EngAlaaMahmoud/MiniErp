@@ -4,19 +4,20 @@
 @inject ApiClient Api
 @inject NavigationManager Nav
 @using System.ComponentModel.DataAnnotations
+@using System.Net.Http.Json
 
-<PageTitle>المنتجات</PageTitle>
+<PageTitle>@L["Nav.Products"]</PageTitle>
 
 <div class="container">
     <div class="d-flex justify-content-between align-items-center mb-3">
-        <h1 class="h3 m-0">المنتجات</h1>
+        <h1 class="h3 m-0">@L["Nav.Products"]</h1>
         <a class="btn btn-outline-secondary" href="/">@L["Common.Back"]</a>
     </div>
 
     @if (!Session.IsLoggedIn)
     {
-        <div class="alert alert-warning">مطلوب تسجيل الدخول.</div>
-        <a class="btn btn-primary" href="/login">تسجيل الدخول</a>
+        <div class="alert alert-warning">@L["Auth.Required"]</div>
+        <a class="btn btn-primary" href="/login">@L["Auth.Login"]</a>
     }
     else
     {
@@ -25,8 +26,8 @@
                 <div class="card">
                     <div class="card-body">
                         <div class="d-flex gap-2 mb-2">
-                            <input class="form-control" placeholder="بحث بالاسم أو SKU..." @bind="_search" @bind:event="oninput" />
-                            <button class="btn btn-outline-primary" @onclick="Load">تحديث</button>
+                            <input class="form-control" placeholder="@L["Products.SearchPlaceholder"]" @bind="_search" @bind:event="oninput" />
+                            <button class="btn btn-outline-primary" @onclick="Load">@L["Common.Refresh"]</button>
                         </div>
 
                         @if (!string.IsNullOrWhiteSpace(_error))
@@ -38,15 +39,21 @@
                             <table class="table table-sm table-striped align-middle">
                                 <thead>
                                     <tr>
-                                        <th>الاسم</th>
-                                        <th>SKU</th>
-                                        <th>Category</th>
-                                        <th>Tax</th>
-                                        <th>Tax Code</th>
-                                        <th class="text-end">Reorder</th>
-                                        <th class="text-end">السعر</th>
-                                        <th class="text-end">التكلفة</th>
-                                        <th>نشط</th>
+                                        <th class="text-end">@L["Products.Col.Vat"]</th>
+                                        <th class="text-end">@L["Products.Col.TableTax"]</th>
+                                        <th class="text-end">@L["Products.Col.ServiceFee"]</th>
+                                        <th class="text-end">@L["Products.Col.AdditionalTaxes"]</th>
+                                        <th class="text-end">@L["Products.Col.AdditionalFees"]</th>
+                                        <th class="text-end">@L["Products.Col.PriceAfterDiscount"]</th>
+                                        <th class="text-end">@L["Products.Col.Discount"]</th>
+                                        <th class="text-end">@L["Products.Col.UnitPrice"]</th>
+                                        <th>@L["Products.Col.ProductName"]</th>
+                                        <th>@L["Products.Col.DescriptionModel"]</th>
+                                        <th>@L["Products.Col.CompanyName"]</th>
+                                        <th>@L["Products.Col.ProductGroup"]</th>
+                                        <th>@L["Products.Col.InternalCode"]</th>
+                                        <th>@L["Products.Col.EgsCode"]</th>
+                                        <th>@L["Common.Active"]</th>
                                         <th></th>
                                     </tr>
                                 </thead>
@@ -54,17 +61,23 @@
                                     @foreach (var p in _products)
                                     {
                                         <tr>
-                                            <td>@p.Name</td>
-                                            <td class="text-muted">@p.Sku</td>
-                                            <td>@LookupName(_categoryNameById, p.CategoryId)</td>
-                                            <td>@LookupName(_taxRateNameById, p.TaxRateId)</td>
-                                            <td>@LookupName(_taxTypeNameById, p.SalesTaxTypeId)</td>
-                                            <td class="text-end text-muted">@p.ReorderLevel</td>
+                                            <td class="text-end">@LookupName(_taxRateNameById, p.TaxRateId)</td>
+                                            <td class="text-end text-muted">0</td>
+                                            <td class="text-end text-muted">0</td>
+                                            <td class="text-end text-muted">0</td>
+                                            <td class="text-end text-muted">0</td>
+                                            <td class="text-end">@decimal.Round(p.Price - p.DefaultDiscount, 3)</td>
+                                            <td class="text-end">@p.DefaultDiscount</td>
                                             <td class="text-end">@p.Price</td>
-                                            <td class="text-end text-muted">@p.Cost</td>
-                                            <td>@(p.IsActive ? "نعم" : "لا")</td>
+                                            <td>@p.Name</td>
+                                            <td class="text-muted">@p.Description</td>
+                                            <td class="text-muted">@p.BrandName</td>
+                                            <td>@LookupName(_categoryNameById, p.CategoryId)</td>
+                                            <td class="text-muted">@p.Sku</td>
+                                            <td class="text-muted">@p.PrimaryBarcode</td>
+                                            <td>@(p.IsActive ? L["Common.Yes"] : L["Common.No"])</td>
                                             <td class="text-end">
-                                                <button class="btn btn-sm btn-outline-secondary" @onclick="() => SelectForEdit(p)">تعديل</button>
+                                                <button class="btn btn-sm btn-outline-secondary" @onclick="() => SelectForEdit(p)">@L["Common.Edit"]</button>
                                             </td>
                                         </tr>
                                     }
@@ -78,31 +91,26 @@
             <div class="col-lg-5">
                 <div class="card mb-3">
                     <div class="card-body">
-                        <div class="fw-bold mb-2">إضافة منتج</div>
+                        <div class="fw-bold mb-2">@L["Products.AddTitle"]</div>
                         <EditForm Model="_create" OnValidSubmit="Create">
                             <DataAnnotationsValidator />
                             <div class="mb-2">
-                                <label class="form-label">الاسم</label>
+                                <label class="form-label">@L["Products.Field.ProductName"]</label>
                                 <InputText class="form-control" @bind-Value="_create.Name" />
                             </div>
-                            <div class="mb-2">
-                                <label class="form-label">SKU (اختياري)</label>
-                                <InputText class="form-control" @bind-Value="_create.Sku" />
-                            </div>
                             <div class="row g-2">
-                                <div class="col">
-                                    <label class="form-label">السعر</label>
-                                    <InputNumber class="form-control" @bind-Value="_create.Price" />
+                                <div class="col-md-6">
+                                    <label class="form-label">@L["Products.Field.InternalCode"]</label>
+                                    <InputText class="form-control" @bind-Value="_create.Sku" />
                                 </div>
-                                <div class="col">
-                                    <label class="form-label">التكلفة</label>
-                                    <InputNumber class="form-control" @bind-Value="_create.Cost" />
+                                <div class="col-md-6">
+                                    <label class="form-label">@L["Products.Field.EgsCode"]</label>
+                                    <InputText class="form-control" @bind-Value="_create.PrimaryBarcode" />
                                 </div>
                             </div>
-
                             <div class="row g-2 mt-1">
-                                <div class="col-12">
-                                    <label class="form-label">Category</label>
+                                <div class="col-md-6">
+                                    <label class="form-label">@L["Products.Field.ProductGroup"]</label>
                                     <InputSelect class="form-select" @bind-Value="_create.CategoryId">
                                         <option value="">-</option>
                                         @foreach (var c in _categories)
@@ -111,8 +119,45 @@
                                         }
                                     </InputSelect>
                                 </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">@L["Products.Field.UnitMeasure"]</label>
+                                    <InputText class="form-control" @bind-Value="_create.DefaultUnitName" />
+                                </div>
+                            </div>
+                            <div class="row g-2 mt-1">
+                                <div class="col-md-6">
+                                    <label class="form-label">@L["Products.Field.CompanyName"]</label>
+                                    <InputText class="form-control" @bind-Value="_create.BrandName" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">@L["Products.Field.DescriptionModel"]</label>
+                                    <InputText class="form-control" @bind-Value="_create.Description" />
+                                </div>
+                            </div>
+                            <div class="row g-2">
+                                <div class="col">
+                                    <label class="form-label">@L["Products.Field.UnitPrice"]</label>
+                                    <InputNumber class="form-control" @bind-Value="_create.Price" />
+                                </div>
+                                <div class="col">
+                                    <label class="form-label">@L["Products.Field.Cost"]</label>
+                                    <InputNumber class="form-control" @bind-Value="_create.Cost" />
+                                </div>
+                            </div>
+                            <div class="row g-2 mt-1">
+                                <div class="col">
+                                    <label class="form-label">@L["Products.Field.Discount"]</label>
+                                    <InputNumber class="form-control" @bind-Value="_create.DefaultDiscount" />
+                                </div>
+                                <div class="col">
+                                    <label class="form-label">@L["Products.Field.PriceAfterDiscount"]</label>
+                                    <input class="form-control text-end" value="@decimal.Round(_create.Price - _create.DefaultDiscount, 3)" readonly />
+                                </div>
+                            </div>
+
+                            <div class="row g-2 mt-1">
                                 <div class="col-12">
-                                    <label class="form-label">Tax Rate</label>
+                                    <label class="form-label">@L["Products.Field.VatRate"]</label>
                                     <InputSelect class="form-select" @bind-Value="_create.TaxRateId">
                                         <option value="">-</option>
                                         @foreach (var r in _taxRates)
@@ -122,7 +167,7 @@
                                     </InputSelect>
                                 </div>
                                 <div class="col-12">
-                                    <label class="form-label">Tax Code (Sales)</label>
+                                    <label class="form-label">@L["Products.Field.TaxCodeSales"]</label>
                                     <InputSelect class="form-select" @bind-Value="_create.SalesTaxTypeId">
                                         <option value="">-</option>
                                         @foreach (var t in _taxTypes)
@@ -132,52 +177,72 @@
                                     </InputSelect>
                                 </div>
                                 <div class="col-12">
-                                    <label class="form-label">Reorder Level</label>
+                                    <label class="form-label">@L["Products.Field.ReorderLevel"]</label>
                                     <InputNumber class="form-control" @bind-Value="_create.ReorderLevel" />
                                 </div>
                             </div>
                             <div class="form-check mt-2 mb-3">
                                 <InputCheckbox class="form-check-input" @bind-Value="_create.IsActive" />
-                                <label class="form-check-label">نشط</label>
+                                <label class="form-check-label">@L["Common.Active"]</label>
                             </div>
-                            <button class="btn btn-primary w-100" disabled="@_busy">حفظ</button>
+                            <button class="btn btn-primary w-100" disabled="@_busy">@L["Common.Save"]</button>
                         </EditForm>
                     </div>
                 </div>
 
                 <div class="card">
                     <div class="card-body">
-                        <div class="fw-bold mb-2">تعديل منتج</div>
+                        <div class="fw-bold mb-2">@L["Products.EditTitle"]</div>
                         @if (_edit is null)
                         {
-                            <div class="text-muted">اختر منتج من القائمة.</div>
+                            <div class="text-muted">@L["Products.SelectToEdit"]</div>
                         }
                         else
                         {
                             <EditForm Model="_edit" OnValidSubmit="SaveEdit">
                                 <DataAnnotationsValidator />
                                 <div class="mb-2">
-                                    <label class="form-label">الاسم</label>
+                                    <label class="form-label">@L["Products.Field.ProductName"]</label>
                                     <InputText class="form-control" @bind-Value="_edit.Name" />
                                 </div>
                                 <div class="mb-2">
-                                    <label class="form-label">SKU</label>
+                                    <label class="form-label">@L["Products.Field.InternalCode"]</label>
                                     <InputText class="form-control" @bind-Value="_edit.Sku" />
                                 </div>
                                 <div class="row g-2">
+                                    <div class="col-md-6">
+                                        <label class="form-label">@L["Products.Field.CompanyName"]</label>
+                                        <InputText class="form-control" @bind-Value="_edit.BrandName" />
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">@L["Products.Field.DescriptionModel"]</label>
+                                        <InputText class="form-control" @bind-Value="_edit.Description" />
+                                    </div>
+                                </div>
+                                <div class="row g-2 mt-1">
+                                    <div class="col-md-6">
+                                        <label class="form-label">@L["Products.Field.UnitMeasure"]</label>
+                                        <InputText class="form-control" @bind-Value="_edit.DefaultUnitName" />
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">@L["Products.Field.Discount"]</label>
+                                        <InputNumber class="form-control" @bind-Value="_edit.DefaultDiscount" />
+                                    </div>
+                                </div>
+                                <div class="row g-2">
                                     <div class="col">
-                                        <label class="form-label">السعر</label>
+                                        <label class="form-label">@L["Products.Field.UnitPrice"]</label>
                                         <InputNumber class="form-control" @bind-Value="_edit.Price" />
                                     </div>
                                     <div class="col">
-                                        <label class="form-label">التكلفة</label>
+                                        <label class="form-label">@L["Products.Field.Cost"]</label>
                                         <InputNumber class="form-control" @bind-Value="_edit.Cost" />
                                     </div>
                                 </div>
 
                                 <div class="row g-2 mt-1">
                                     <div class="col-12">
-                                        <label class="form-label">Category</label>
+                                        <label class="form-label">@L["Products.Field.ProductGroup"]</label>
                                         <InputSelect class="form-select" @bind-Value="_edit.CategoryId">
                                             <option value="">-</option>
                                             @foreach (var c in _categories)
@@ -187,7 +252,7 @@
                                         </InputSelect>
                                     </div>
                                     <div class="col-12">
-                                        <label class="form-label">Tax Rate</label>
+                                        <label class="form-label">@L["Products.Field.VatRate"]</label>
                                         <InputSelect class="form-select" @bind-Value="_edit.TaxRateId">
                                             <option value="">-</option>
                                             @foreach (var r in _taxRates)
@@ -197,7 +262,7 @@
                                         </InputSelect>
                                     </div>
                                     <div class="col-12">
-                                        <label class="form-label">Tax Code (Sales)</label>
+                                        <label class="form-label">@L["Products.Field.TaxCodeSales"]</label>
                                         <InputSelect class="form-select" @bind-Value="_edit.SalesTaxTypeId">
                                             <option value="">-</option>
                                             @foreach (var t in _taxTypes)
@@ -207,13 +272,13 @@
                                         </InputSelect>
                                     </div>
                                     <div class="col-12">
-                                        <label class="form-label">Reorder Level</label>
+                                        <label class="form-label">@L["Products.Field.ReorderLevel"]</label>
                                         <InputNumber class="form-control" @bind-Value="_edit.ReorderLevel" />
                                     </div>
                                 </div>
                                 <div class="form-check mt-2 mb-3">
                                     <InputCheckbox class="form-check-input" @bind-Value="_edit.IsActive" />
-                                    <label class="form-check-label">نشط</label>
+                                    <label class="form-check-label">@L["Common.Active"]</label>
                                 </div>
 
                                 <div class="mb-3">
@@ -367,6 +432,21 @@
         _categoryNameById = _categories.ToDictionary(x => x.Id, x => x.Name);
         _taxRateNameById = _taxRates.ToDictionary(x => x.Id, x => x.Name);
         _taxTypeNameById = _taxTypes.ToDictionary(x => x.Id, x => $"{x.MainCode}/{x.SubCode}");
+
+        if (_create.CategoryId is null && _categories.Count == 1)
+        {
+            _create.CategoryId = _categories[0].Id;
+        }
+
+        if (_create.TaxRateId is null && _taxRates.Count == 1)
+        {
+            _create.TaxRateId = _taxRates[0].Id;
+        }
+
+        if (_create.SalesTaxTypeId is null && _taxTypes.Count == 1)
+        {
+            _create.SalesTaxTypeId = _taxTypes[0].Id;
+        }
     }
 
     private async Task Load()
@@ -402,11 +482,21 @@
         _error = null;
         try
         {
+            if (_create.TaxRateId is null || _create.TaxRateId.Value == Guid.Empty)
+            {
+                _error = L["Products.Error.VatRateRequired"].Value;
+                return;
+            }
+
             var response = await Api.PostAsync("catalog/products", new
             {
                 name = _create.Name,
                 sku = string.IsNullOrWhiteSpace(_create.Sku) ? null : _create.Sku,
+                brandName = string.IsNullOrWhiteSpace(_create.BrandName) ? null : _create.BrandName,
+                description = string.IsNullOrWhiteSpace(_create.Description) ? null : _create.Description,
                 price = _create.Price,
+                defaultDiscount = _create.DefaultDiscount,
+                defaultUnitName = string.IsNullOrWhiteSpace(_create.DefaultUnitName) ? null : _create.DefaultUnitName,
                 cost = _create.Cost,
                 categoryId = _create.CategoryId,
                 taxRateId = _create.TaxRateId,
@@ -421,7 +511,25 @@
                 return;
             }
 
+            var created = await response.Content.ReadFromJsonAsync<ProductItem>();
+            if (created is not null && !string.IsNullOrWhiteSpace(_create.PrimaryBarcode))
+            {
+                await Api.PostAsync($"catalog/products/{created.Id}/barcodes", new { code = _create.PrimaryBarcode.Trim() });
+            }
+
             _create = new CreateProductModel { IsActive = true };
+            if (_create.CategoryId is null && _categories.Count == 1)
+            {
+                _create.CategoryId = _categories[0].Id;
+            }
+            if (_create.TaxRateId is null && _taxRates.Count == 1)
+            {
+                _create.TaxRateId = _taxRates[0].Id;
+            }
+            if (_create.SalesTaxTypeId is null && _taxTypes.Count == 1)
+            {
+                _create.SalesTaxTypeId = _taxTypes[0].Id;
+            }
             await Load();
         }
         finally
@@ -437,7 +545,11 @@
             Id = p.Id,
             Name = p.Name,
             Sku = p.Sku,
+            BrandName = p.BrandName,
+            Description = p.Description,
             Price = p.Price,
+            DefaultDiscount = p.DefaultDiscount,
+            DefaultUnitName = p.DefaultUnitName,
             Cost = p.Cost,
             CategoryId = p.CategoryId,
             TaxRateId = p.TaxRateId,
@@ -445,6 +557,10 @@
             ReorderLevel = p.ReorderLevel,
             IsActive = p.IsActive
         };
+        if (_edit.TaxRateId is null && _taxRates.Count == 1)
+        {
+            _edit.TaxRateId = _taxRates[0].Id;
+        }
         _barcode = "";
         await LoadUnits(p.Id);
     }
@@ -460,11 +576,21 @@
         _error = null;
         try
         {
+            if (_edit.TaxRateId is null || _edit.TaxRateId.Value == Guid.Empty)
+            {
+                _error = L["Products.Error.VatRateRequired"].Value;
+                return;
+            }
+
             var response = await Api.PutAsync($"catalog/products/{_edit.Id}", new
             {
                 name = _edit.Name,
                 sku = string.IsNullOrWhiteSpace(_edit.Sku) ? null : _edit.Sku,
+                brandName = string.IsNullOrWhiteSpace(_edit.BrandName) ? null : _edit.BrandName,
+                description = string.IsNullOrWhiteSpace(_edit.Description) ? null : _edit.Description,
                 price = _edit.Price,
+                defaultDiscount = _edit.DefaultDiscount,
+                defaultUnitName = string.IsNullOrWhiteSpace(_edit.DefaultUnitName) ? null : _edit.DefaultUnitName,
                 cost = _edit.Cost,
                 categoryId = _edit.CategoryId,
                 taxRateId = _edit.TaxRateId,
@@ -610,8 +736,13 @@
         public Guid Id { get; set; }
         public string Name { get; set; } = "";
         public string? Sku { get; set; }
+        public string? BrandName { get; set; }
+        public string? Description { get; set; }
         public decimal Price { get; set; }
         public decimal Cost { get; set; }
+        public decimal DefaultDiscount { get; set; }
+        public string? DefaultUnitName { get; set; }
+        public string? PrimaryBarcode { get; set; }
         public Guid? CategoryId { get; set; }
         public Guid? TaxRateId { get; set; }
         public Guid? SalesTaxTypeId { get; set; }
@@ -623,7 +754,12 @@
     {
         [Required] public string Name { get; set; } = "";
         public string? Sku { get; set; }
+        public string? BrandName { get; set; }
+        public string? Description { get; set; }
         public decimal Price { get; set; }
+        public decimal DefaultDiscount { get; set; }
+        public string? DefaultUnitName { get; set; }
+        public string? PrimaryBarcode { get; set; }
         public decimal Cost { get; set; }
         public Guid? CategoryId { get; set; }
         public Guid? TaxRateId { get; set; }

@@ -52,10 +52,10 @@
                             <table class="table table-sm table-striped align-middle">
                                 <thead>
                                     <tr>
-                                        <th>Main</th>
-                                        <th>Sub</th>
-                                        <th>Type</th>
-                                        <th>@L["Common.Description"]</th>
+                                        <th>@L["Taxes.Col.MainCode"]</th>
+                                        <th>@L["Taxes.Col.TaxType"]</th>
+                                        <th>@L["Taxes.Col.SubCode"]</th>
+                                        <th>@L["Taxes.Col.Description"]</th>
                                         <th>@L["Common.Active"]</th>
                                     </tr>
                                 </thead>
@@ -64,8 +64,8 @@
                                     {
                                         <tr>
                                             <td><code>@t.MainCode</code></td>
-                                            <td><code>@t.SubCode</code></td>
                                             <td class="text-muted">@t.TaxType</td>
+                                            <td><code>@t.SubCode</code></td>
                                             <td>@t.Description</td>
                                             <td>@(t.IsActive ? L["Common.Yes"] : L["Common.No"])</td>
                                         </tr>
@@ -87,22 +87,22 @@
 
                             <div class="row g-2">
                                 <div class="col">
-                                    <label class="form-label">MainCode</label>
+                                    <label class="form-label">@L["Taxes.Col.MainCode"]</label>
                                     <InputText class="form-control" @bind-Value="_create.MainCode" />
                                 </div>
                                 <div class="col">
-                                    <label class="form-label">SubCode</label>
+                                    <label class="form-label">@L["Taxes.Col.SubCode"]</label>
                                     <InputText class="form-control" @bind-Value="_create.SubCode" />
                                 </div>
                             </div>
 
                             <div class="mb-2 mt-2">
-                                <label class="form-label">Type</label>
+                                <label class="form-label">@L["Taxes.Col.TaxType"]</label>
                                 <InputText class="form-control" @bind-Value="_create.TaxType" />
                             </div>
 
                             <div class="mb-2">
-                                <label class="form-label">البيان</label>
+                                <label class="form-label">@L["Taxes.Col.Description"]</label>
                                 <InputText class="form-control" @bind-Value="_create.Description" />
                             </div>
 

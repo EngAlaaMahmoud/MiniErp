@@ -6,21 +6,25 @@
 @inject IJSRuntime JS
 @using Microsoft.JSInterop
 
-<PageTitle>المشتريات</PageTitle>
+<PageTitle>@L["Nav.Purchases"]</PageTitle>
 
-<div class="container pos-page">
+<div class="container">
     <div class="d-flex justify-content-between align-items-center mb-3">
-        <h1 class="h3 m-0">فاتورة المشتريات</h1>
+        <h1 class="h3 m-0">@L["Nav.Purchases"]</h1>
         <div class="d-flex gap-2">
-            <button class="btn btn-outline-primary" @onclick="Reload" disabled="@_busy">تحديث</button>
+            <button class="btn btn-outline-primary" @onclick="Reload" disabled="@_busy">@L["Common.Refresh"]</button>
             <a class="btn btn-outline-secondary" href="/">@L["Common.Back"]</a>
         </div>
     </div>
 
-    @if (!Session.IsLoggedIn)
+    @if (!_ready)
     {
-        <div class="alert alert-warning">مطلوب تسجيل الدخول.</div>
-        <a class="btn btn-primary" href="/login">تسجيل الدخول</a>
+        <div class="text-muted">@L["Common.Loading"]</div>
+    }
+    else if (!Session.IsLoggedIn)
+    {
+        <div class="alert alert-warning">@L["Auth.Required"]</div>
+        <a class="btn btn-primary" href="/login">@L["Auth.Login"]</a>
     }
     else
     {
@@ -32,13 +36,10 @@
         @if (!string.IsNullOrWhiteSpace(_success))
         {
             <div class="alert alert-success d-print-none">
-                @_success
-                @if (_lastReceipt is not null)
-                {
-                    <div class="mt-2">
-                        <button class="btn btn-sm btn-outline-dark" @onclick="PrintLast" disabled="@_busy">طباعة</button>
-                    </div>
-                }
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>@_success</div>
+                    <button class="btn btn-sm btn-outline-dark" @onclick="PrintLast" disabled="@_busy">@L["Common.Print"]</button>
+                </div>
             </div>
         }
 
@@ -46,27 +47,27 @@
             <div class="col-lg-7">
                 <div class="card">
                     <div class="card-body">
-                        <div class="fw-bold mb-2">مشتريات حديثة (Branch: <code>@Session.BranchId</code>)</div>
+                        <div class="fw-bold mb-2">@L["Purchases.ListTitle"]</div>
                         <div class="table-responsive">
                             <table class="table table-sm table-striped align-middle">
                                 <thead>
                                     <tr>
-                                        <th>الرقم</th>
-                                        <th>التاريخ</th>
-                                        <th>المورد</th>
-                                        <th class="text-end">الإجمالي</th>
-                                        <th class="text-end">مدفوع</th>
+                                        <th>@L["Common.Number"]</th>
+                                        <th>@L["Common.Date"]</th>
+                                        <th>@L["Common.Party"]</th>
+                                        <th class="text-end">@L["Common.Tax"]</th>
+                                        <th class="text-end">@L["Common.Total"]</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     @foreach (var p in _purchases)
                                     {
                                         <tr>
-                                            <td><code>@p.Number</code></td>
+                                            <td><code>@(string.IsNullOrWhiteSpace(p.ExternalNumber) ? p.Number : p.ExternalNumber)</code></td>
                                             <td class="text-muted">@p.At.LocalDateTime.ToString("yyyy-MM-dd HH:mm")</td>
                                             <td>@(string.IsNullOrWhiteSpace(p.SupplierName) ? "-" : p.SupplierName)</td>
+                                            <td class="text-end">@p.TaxTotal</td>
                                             <td class="text-end">@p.Total</td>
-                                            <td class="text-end">@p.CashPaid</td>
                                         </tr>
                                     }
                                 </tbody>
@@ -79,39 +80,100 @@
             <div class="col-lg-5">
                 <div class="card">
                     <div class="card-body">
-                        <div class="fw-bold mb-2">تسجيل فاتورة مشتريات</div>
+                        <div class="fw-bold mb-2">@L["Purchases.CreateTitle"]</div>
+
+                        <div class="row g-2 mb-2">
+                            <div class="col-12 col-md-6">
+                                <label class="form-label">@L["Purchases.ExternalNumber"]</label>
+                                <input class="form-control" @bind="_externalNumber" disabled="@_busy" />
+                                <div class="small text-muted">@L["Purchases.ExternalNumberHint"]</div>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label class="form-label">@L["Common.Date"]</label>
+                                <InputDate class="form-control" @bind-Value="_invoiceDate" disabled="@_busy" />
+                            </div>
+                        </div>
 
                         <div class="mb-2">
-                            <label class="form-label">المورد (اختياري)</label>
-                            <select class="form-select" @bind="_supplierId">
+                            <label class="form-label">@L["Purchases.SupplierOptional"]</label>
+                            <select class="form-select" @bind="_supplierId" disabled="@_busy">
                                 <option value="">-</option>
-                                @foreach (var s in _suppliers.Where(x => x.IsActive))
+                                @foreach (var s in _suppliers.Where(x => x.IsActive).OrderBy(x => x.Name))
                                 {
                                     <option value="@s.Id">@s.Name</option>
                                 }
                             </select>
-                            @if (string.IsNullOrWhiteSpace(_supplierId))
-                            {
-                                <div class="mt-2">
-                                    <input class="form-control" placeholder="اسم المورد (اختياري)" @bind="_supplierName" />
-                                </div>
-                            }
                         </div>
 
-                        <div class="row g-2">
+                        @if (string.IsNullOrWhiteSpace(_supplierId))
+                        {
+                            <div class="mb-2">
+                                <input class="form-control" placeholder="@L["Purchases.SupplierNameOptional"]" @bind="_supplierName" disabled="@_busy" />
+                            </div>
+                            <div class="mb-2">
+                                <input class="form-control" placeholder="@L["Purchases.SupplierTaxNoOptional"]" @bind="_supplierTaxRegistrationNo" disabled="@_busy" />
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label">@L["Purchases.Address"]</label>
+                                <div class="row g-2">
+                                    <div class="col-12 col-md-4">
+                                        <input class="form-control" placeholder="@L["Customers.Country"]" @bind="_supplierCountry" disabled="@_busy" />
+                                    </div>
+                                    <div class="col-12 col-md-4">
+                                        <input class="form-control" placeholder="@L["Customers.Governorate"]" @bind="_supplierGovernorate" disabled="@_busy" />
+                                    </div>
+                                    <div class="col-12 col-md-4">
+                                        <input class="form-control" placeholder="@L["Customers.City"]" @bind="_supplierCity" disabled="@_busy" />
+                                    </div>
+                                    <div class="col-12 col-md-4">
+                                        <input class="form-control" placeholder="@L["Customers.BuildingNo"]" @bind="_supplierBuildingNo" disabled="@_busy" />
+                                    </div>
+                                    <div class="col-12 col-md-4">
+                                        <input class="form-control" placeholder="@L["Customers.Floor"]" @bind="_supplierFloor" disabled="@_busy" />
+                                    </div>
+                                    <div class="col-12 col-md-4">
+                                        <input class="form-control" placeholder="@L["Customers.Apartment"]" @bind="_supplierApartment" disabled="@_busy" />
+                                    </div>
+                                    <div class="col-12 col-md-8">
+                                        <input class="form-control" placeholder="@L["Customers.StreetName"]" @bind="_supplierStreetName" disabled="@_busy" />
+                                    </div>
+                                    <div class="col-12 col-md-4">
+                                        <input class="form-control" placeholder="@L["Customers.PostalCodeOptional"]" @bind="_supplierPostalCode" disabled="@_busy" />
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            var s = SelectedSupplier;
+                            if (s is not null)
+                            {
+                                <div class="small text-muted mb-1">@L["Purchases.SupplierTaxNoLabel"]: @(string.IsNullOrWhiteSpace(s.TaxRegistrationNo) ? "-" : s.TaxRegistrationNo)</div>
+                                <div class="small text-muted mb-3">@L["Purchases.Address"]: @BuildAddress(s.Country, s.Governorate, s.City, s.BuildingNo, s.Floor, s.Apartment, s.StreetName, s.PostalCode, s.Address)</div>
+                            }
+                        }
+
+                        <div class="row g-2 mb-2">
                             <div class="col-12">
-                                <label class="form-label">منتج</label>
-                                <select class="form-select" value="@_lineProductId" @onchange="OnLineProductChanged">
-                                    <option value="">اختر...</option>
-                                    @foreach (var p in _products)
+                                <label class="form-label">@L["Common.Product"]</label>
+                                <select class="form-select" value="@_lineProductId" @onchange="OnLineProductChanged" disabled="@_busy">
+                                    <option value="">@L["Common.Select"]</option>
+                                    @foreach (var p in _products.Where(x => x.IsActive).OrderBy(x => x.Name))
                                     {
                                         <option value="@p.Id">@p.Name</option>
                                     }
                                 </select>
+                                @if (SelectedProduct is not null)
+                                {
+                                    <div class="small text-muted mt-1">
+                                        @L["Products.InternalCode"]: @(string.IsNullOrWhiteSpace(SelectedProduct.Sku) ? "-" : SelectedProduct.Sku)
+                                        • @L["Products.PrimaryBarcode"]: @(string.IsNullOrWhiteSpace(SelectedProduct.PrimaryBarcode) ? "-" : SelectedProduct.PrimaryBarcode)
+                                    </div>
+                                }
                             </div>
                             <div class="col-12">
-                                <label class="form-label">الوحدة</label>
-                                <select class="form-select" @bind="_lineProductUnitId" disabled="@(string.IsNullOrWhiteSpace(_lineProductId) || _lineUnits.Count == 0)">
+                                <label class="form-label">@L["Common.Unit"]</label>
+                                <select class="form-select" @bind="_lineProductUnitId" disabled="@(_busy || string.IsNullOrWhiteSpace(_lineProductId) || _lineUnits.Count == 0)">
                                     <option value="">-</option>
                                     @foreach (var u in _lineUnits.Where(x => x.IsActive))
                                     {
@@ -119,70 +181,70 @@
                                     }
                                 </select>
                             </div>
-                            <div class="col">
-                                <label class="form-label">Qty</label>
-                                <input class="form-control text-end" type="number" step="0.001" @bind-value="_lineQty" @bind-value:event="oninput" />
+                            <div class="col-6">
+                                <label class="form-label">@L["Common.Quantity"]</label>
+                                <input class="form-control text-end" type="number" step="0.001" @bind-value="_lineQty" @bind-value:event="oninput" disabled="@_busy" />
                             </div>
-                            <div class="col">
-                                <label class="form-label">UnitCost</label>
-                                <input class="form-control text-end" type="number" step="0.001" @bind-value="_lineUnitCost" @bind-value:event="oninput" />
+                            <div class="col-6">
+                                <label class="form-label">@L["Purchases.UnitCost"]</label>
+                                <input class="form-control text-end" type="number" step="0.001" @bind-value="_lineUnitCost" @bind-value:event="oninput" disabled="@_busy" />
                             </div>
                         </div>
 
-                        <button class="btn btn-outline-secondary w-100 my-3" @onclick="AddLine" disabled="@_busy">إضافة سطر</button>
+                        <button class="btn btn-outline-secondary w-100 mb-3" @onclick="AddLine" disabled="@_busy">@L["Common.AddLine"]</button>
 
                         @if (_lines.Count != 0)
                         {
                             <div class="table-responsive mb-2">
-                                <table class="table table-sm">
+                                <table class="table table-sm table-striped align-middle">
                                     <thead>
                                         <tr>
-                                            <th>المنتج</th>
-                                            <th>الوحدة</th>
-                                            <th class="text-end">Qty</th>
-                                            <th class="text-end">UnitCost</th>
-                                            <th class="text-end">Total</th>
+                                            <th>@L["Common.Product"]</th>
+                                            <th>@L["Common.Unit"]</th>
+                                            <th class="text-end">@L["Common.Quantity"]</th>
+                                            <th class="text-end">@L["Purchases.UnitCost"]</th>
+                                            <th class="text-end">@L["Common.Total"]</th>
                                             <th></th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         @for (var i = 0; i < _lines.Count; i++)
                                         {
-                                            var line = _lines[i];
+                                            var l = _lines[i];
                                             <tr>
-                                                <td>@line.ProductName</td>
-                                                <td class="text-muted">@line.UnitName</td>
-                                                <td class="text-end">@line.Qty</td>
-                                                <td class="text-end">@line.UnitCost</td>
-                                                <td class="text-end">@line.LineTotal</td>
+                                                <td>@l.ProductName</td>
+                                                <td class="text-muted">@((string.IsNullOrWhiteSpace(l.UnitName) ? "-" : l.UnitName))</td>
+                                                <td class="text-end">@l.Qty</td>
+                                                <td class="text-end">@l.UnitCost</td>
+                                                <td class="text-end">@l.LineTotal</td>
                                                 <td class="text-end">
-                                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveLine(i)">حذف</button>
+                                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveLine(i)" disabled="@_busy">×</button>
                                                 </td>
                                             </tr>
                                         }
                                     </tbody>
-                                    <tfoot>
-                                        <tr>
-                                            <th colspan="4" class="text-end">الإجمالي</th>
-                                            <th class="text-end">@Total</th>
-                                            <th></th>
-                                        </tr>
-                                    </tfoot>
                                 </table>
                             </div>
                         }
 
                         <div class="mb-2">
-                            <label class="form-label">CashPaid</label>
-                            <input class="form-control text-end" type="number" step="0.001" @bind-value="_cashPaid" @bind-value:event="oninput" />
+                            <label class="form-label">@L["Purchases.CashPaid"]</label>
+                            <input class="form-control text-end" type="number" step="0.001" @bind-value="_cashPaid" @bind-value:event="oninput" disabled="@_busy" />
                         </div>
-
                         <div class="mb-2">
-                            <label class="form-label">ملاحظة (اختياري)</label>
-                            <InputText class="form-control" @bind-Value="_note" />
+                            <label class="form-label">@L["Common.NoteOptional"]</label>
+                            <input class="form-control" @bind="_note" disabled="@_busy" />
                         </div>
 
-                        <button class="btn btn-primary w-100" @onclick="Submit" disabled="@(_busy || _lines.Count == 0)">حفظ</button>
+                        <div class="card bg-body-tertiary border-0 mb-2">
+                            <div class="card-body p-2">
+                                <div class="d-flex justify-content-between"><span>@L["Common.Total"]</span><span class="fw-bold">@Total</span></div>
+                                <div class="d-flex justify-content-between"><span>@L["Common.Tax"] (VAT)</span><span>@VatTotal</span></div>
+                                <div class="d-flex justify-content-between"><span>@L["Purchases.TotalBeforeVat"]</span><span class="text-muted">@TotalBeforeVat</span></div>
+                            </div>
+                        </div>
+
+                        <button class="btn btn-primary w-100" @onclick="Save" disabled="@(_busy || _lines.Count == 0)">@L["Common.Save"]</button>
                     </div>
                 </div>
             </div>
@@ -191,85 +253,92 @@
         @if (_lastReceipt is not null)
         {
             <div class="d-none d-print-block">
-                <div style="max-width: 420px; margin: 0 auto;">
-                    <h2 class="h5 text-center mb-3">فاتورة مشتريات</h2>
-                    <div class="small text-muted mb-2">رقم: <strong>@_lastReceipt.PurchaseNo</strong></div>
-                    <div class="small text-muted mb-2">تاريخ: @_lastReceipt.At.LocalDateTime.ToString("yyyy-MM-dd HH:mm")</div>
-                    <div class="small text-muted mb-3">المورد: @(string.IsNullOrWhiteSpace(_lastReceipt.SupplierName) ? "-" : _lastReceipt.SupplierName)</div>
+                <h2 class="h4">@L["Purchases.PrintTitle"]</h2>
+                <div class="small text-muted">@L["Common.Number"]: @_lastReceipt.ExternalNumber</div>
+                <div class="small text-muted">@L["Common.Date"]: @_lastReceipt.At.LocalDateTime.ToString("yyyy-MM-dd HH:mm")</div>
+                <div class="small text-muted">@L["Common.Party"]: @_lastReceipt.SupplierName</div>
+                <div class="small text-muted">@L["Purchases.SupplierTaxNoLabel"]: @_lastReceipt.SupplierTaxRegistrationNo</div>
+                <div class="small text-muted mb-2">@L["Purchases.Address"]: @_lastReceipt.SupplierAddress</div>
 
-                    <table class="table table-sm">
-                        <thead>
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>@L["Common.Product"]</th>
+                            <th>@L["Common.Unit"]</th>
+                            <th class="text-end">@L["Common.Quantity"]</th>
+                            <th class="text-end">@L["Purchases.UnitCost"]</th>
+                            <th class="text-end">@L["Common.Total"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var l in _lastReceipt.Lines)
+                        {
                             <tr>
-                                <th>الصنف</th>
-                                <th class="text-end">Qty</th>
-                                <th class="text-end">سعر</th>
-                                <th class="text-end">الإجمالي</th>
+                                <td>@l.ProductName</td>
+                                <td>@(string.IsNullOrWhiteSpace(l.UnitName) ? "-" : l.UnitName)</td>
+                                <td class="text-end">@l.Qty</td>
+                                <td class="text-end">@l.UnitCost</td>
+                                <td class="text-end">@l.LineTotal</td>
                             </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var line in _lastReceipt.Lines)
-                            {
-                                <tr>
-                                    <td>
-                                        @line.ProductName
-                                        @if (!string.IsNullOrWhiteSpace(line.UnitName))
-                                        {
-                                            <span class="text-muted small">(@line.UnitName)</span>
-                                        }
-                                    </td>
-                                    <td class="text-end">@line.Qty</td>
-                                    <td class="text-end">@line.UnitCost</td>
-                                    <td class="text-end">@line.LineTotal</td>
-                                </tr>
-                            }
-                        </tbody>
-                        <tfoot>
-                            <tr>
-                                <th colspan="3" class="text-end">الإجمالي</th>
-                                <th class="text-end">@_lastReceipt.Total</th>
-                            </tr>
-                            <tr>
-                                <th colspan="3" class="text-end">مدفوع</th>
-                                <th class="text-end">@_lastReceipt.CashPaid</th>
-                            </tr>
-                        </tfoot>
-                    </table>
+                        }
+                    </tbody>
+                </table>
 
-                    @if (!string.IsNullOrWhiteSpace(_lastReceipt.Note))
-                    {
-                        <div class="small mt-2">ملاحظة: @_lastReceipt.Note</div>
-                    }
-                </div>
+                <div class="d-flex justify-content-between"><span>@L["Common.Total"]</span><span class="fw-bold">@_lastReceipt.Total</span></div>
+                <div class="d-flex justify-content-between"><span>@L["Common.Tax"] (VAT)</span><span>@_lastReceipt.TaxTotal</span></div>
+                <div class="d-flex justify-content-between"><span>@L["Purchases.TotalBeforeVat"]</span><span class="text-muted">@(_lastReceipt.Total - _lastReceipt.TaxTotal)</span></div>
+                <div class="d-flex justify-content-between"><span>@L["Purchases.CashPaid"]</span><span>@_lastReceipt.CashPaid</span></div>
             </div>
         }
     }
 </div>
 
 @code {
+    private bool _ready;
     private bool _busy;
     private string? _error;
     private string? _success;
 
     private List<ProductItem> _products = [];
+    private List<SupplierOption> _suppliers = [];
     private List<PurchaseItem> _purchases = [];
 
-    private List<SupplierOption> _suppliers = [];
+    private string _externalNumber = "";
+    private DateTime _invoiceDate = DateTime.Today;
+
     private string _supplierId = "";
     private string? _supplierName;
+    private string _supplierTaxRegistrationNo = "";
+    private string _supplierCountry = "مصر";
+    private string _supplierGovernorate = "";
+    private string _supplierCity = "";
+    private string _supplierBuildingNo = "";
+    private string _supplierFloor = "";
+    private string _supplierApartment = "";
+    private string _supplierStreetName = "";
+    private string _supplierPostalCode = "";
+
     private string _lineProductId = "";
     private string _lineProductUnitId = "";
     private List<UnitOption> _lineUnits = [];
     private decimal _lineQty = 1;
     private decimal _lineUnitCost;
-    private string? _note;
     private decimal _cashPaid;
+    private string? _note;
+
     private List<PurchaseLineUi> _lines = [];
     private PurchaseReceipt? _lastReceipt;
     private bool _initialLoadDone;
 
     private decimal Total => _lines.Sum(x => x.LineTotal);
+    private decimal VatTotal => _lastReceipt?.TaxTotal ?? 0m;
+    private decimal TotalBeforeVat => Total - (_lastReceipt?.TaxTotal ?? 0m);
 
-    protected override Task OnInitializedAsync() => Task.CompletedTask;
+    private SupplierOption? SelectedSupplier =>
+        Guid.TryParse(_supplierId, out var id) ? _suppliers.SingleOrDefault(x => x.Id == id) : null;
+
+    private ProductItem? SelectedProduct =>
+        Guid.TryParse(_lineProductId, out var id) ? _products.SingleOrDefault(x => x.Id == id) : null;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -280,12 +349,13 @@
 
         _initialLoadDone = true;
         await Session.EnsureLoadedAsync();
+        _ready = true;
+        StateHasChanged();
+
         if (Session.IsLoggedIn)
         {
             await Reload();
         }
-
-        StateHasChanged();
     }
 
     private async Task Reload()
@@ -310,9 +380,34 @@
         {
             _error = string.IsNullOrWhiteSpace(ex.Body) ? ex.Message : ex.Body;
         }
-        catch (Exception ex)
+        finally
         {
-            _error = ex.Message;
+            _busy = false;
+        }
+    }
+
+    private async Task OnLineProductChanged(ChangeEventArgs e)
+    {
+        _lineProductId = e.Value?.ToString() ?? "";
+        _lineProductUnitId = "";
+        _lineUnits = [];
+
+        if (!Guid.TryParse(_lineProductId, out var productId) || productId == Guid.Empty)
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            _lineUnits = await Api.GetAsync<List<UnitOption>>($"catalog/products/{productId}/units");
+            var def = _lineUnits.FirstOrDefault(x => x.IsDefault && x.IsActive) ?? _lineUnits.FirstOrDefault(x => x.IsActive);
+            _lineProductUnitId = def?.Id.ToString() ?? "";
+        }
+        catch
+        {
+            _lineUnits = [];
+            _lineProductUnitId = "";
         }
         finally
         {
@@ -369,7 +464,7 @@
         _cashPaid = Total;
     }
 
-    private async Task Submit()
+    private async Task Save()
     {
         if (_lines.Count == 0)
         {
@@ -378,14 +473,19 @@
 
         Guid? supplierId = null;
         string? supplierName = null;
+        string? supplierTaxNo = null;
+        string? supplierAddress = null;
         if (!string.IsNullOrWhiteSpace(_supplierId) && Guid.TryParse(_supplierId, out var parsedSupplierId) && parsedSupplierId != Guid.Empty)
         {
             supplierId = parsedSupplierId;
-            supplierName = _suppliers.SingleOrDefault(x => x.Id == parsedSupplierId)?.Name;
+            var s = _suppliers.SingleOrDefault(x => x.Id == parsedSupplierId);
+            supplierName = s?.Name;
         }
         else if (!string.IsNullOrWhiteSpace(_supplierName))
         {
             supplierName = _supplierName.Trim();
+            supplierTaxNo = NullIfEmpty(_supplierTaxRegistrationNo);
+            supplierAddress = BuildAddress(_supplierCountry, _supplierGovernorate, _supplierCity, _supplierBuildingNo, _supplierFloor, _supplierApartment, _supplierStreetName, _supplierPostalCode, null);
         }
 
         _busy = true;
@@ -396,8 +496,12 @@
             var response = await Api.PostAsync("purchases", new
             {
                 branchId = Session.BranchId,
+                at = new DateTimeOffset(_invoiceDate.Date, TimeSpan.Zero),
+                externalNumber = NullIfEmpty(_externalNumber),
                 supplierId,
                 supplierName,
+                supplierTaxRegistrationNo = supplierTaxNo,
+                supplierAddress,
                 items = _lines.Select(x => new { productId = x.ProductId, productUnitId = x.ProductUnitId, qty = x.Qty, unitCost = x.UnitCost }).ToArray(),
                 cashPaid = _cashPaid,
                 note = string.IsNullOrWhiteSpace(_note) ? null : _note
@@ -410,19 +514,39 @@
             }
 
             var body = await response.Content.ReadFromJsonAsync<CreatePurchaseResponse>(new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
-            _success = $"تم تسجيل فاتورة مشتريات: {body?.PurchaseNo}";
+            _success = $"{L["Purchases.Saved"].Value}: {body?.PurchaseNo}";
+
+            var selectedSupplier = supplierId is null ? null : _suppliers.SingleOrDefault(x => x.Id == supplierId.Value);
+            var printSupplierTax = supplierId is null ? supplierTaxNo : selectedSupplier?.TaxRegistrationNo;
+            var printSupplierAddress = supplierId is null
+                ? supplierAddress
+                : BuildAddress(selectedSupplier?.Country, selectedSupplier?.Governorate, selectedSupplier?.City, selectedSupplier?.BuildingNo, selectedSupplier?.Floor, selectedSupplier?.Apartment, selectedSupplier?.StreetName, selectedSupplier?.PostalCode, selectedSupplier?.Address);
 
             _lastReceipt = new PurchaseReceipt(
                 body?.PurchaseNo ?? "",
+                NullIfEmpty(_externalNumber) ?? (body?.PurchaseNo ?? ""),
                 DateTimeOffset.Now,
                 supplierName,
+                printSupplierTax,
+                printSupplierAddress,
                 _lines.Select(x => new PurchaseReceiptLine(x.ProductName, x.UnitName, x.Qty, x.UnitCost)).ToList(),
                 Total,
+                body?.TaxTotal ?? 0m,
                 _cashPaid,
                 string.IsNullOrWhiteSpace(_note) ? null : _note);
 
+            _externalNumber = "";
             _supplierId = "";
             _supplierName = null;
+            _supplierTaxRegistrationNo = "";
+            _supplierCountry = "مصر";
+            _supplierGovernorate = "";
+            _supplierCity = "";
+            _supplierBuildingNo = "";
+            _supplierFloor = "";
+            _supplierApartment = "";
+            _supplierStreetName = "";
+            _supplierPostalCode = "";
             _note = null;
             _lines.Clear();
             _cashPaid = 0;
@@ -444,10 +568,46 @@
         await JS.InvokeVoidAsync("window.print");
     }
 
+    private void RedirectToLogin()
+    {
+        var relative = Nav.ToBaseRelativePath(Nav.Uri);
+        var target = string.IsNullOrWhiteSpace(relative) ? "/login" : $"/login?return=/{Uri.EscapeDataString(relative)}";
+        Nav.NavigateTo(target);
+    }
+
+    private static string? NullIfEmpty(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static string? BuildAddress(
+        string? country,
+        string? governorate,
+        string? city,
+        string? buildingNo,
+        string? floor,
+        string? apartment,
+        string? streetName,
+        string? postalCode,
+        string? freeForm)
+    {
+        var parts = new List<string>(10);
+        if (!string.IsNullOrWhiteSpace(country)) parts.Add(country.Trim());
+        if (!string.IsNullOrWhiteSpace(governorate)) parts.Add(governorate.Trim());
+        if (!string.IsNullOrWhiteSpace(city)) parts.Add(city.Trim());
+        if (!string.IsNullOrWhiteSpace(buildingNo)) parts.Add(buildingNo.Trim());
+        if (!string.IsNullOrWhiteSpace(floor)) parts.Add(floor.Trim());
+        if (!string.IsNullOrWhiteSpace(apartment)) parts.Add(apartment.Trim());
+        if (!string.IsNullOrWhiteSpace(streetName)) parts.Add(streetName.Trim());
+        if (!string.IsNullOrWhiteSpace(postalCode)) parts.Add(postalCode.Trim());
+        if (!string.IsNullOrWhiteSpace(freeForm)) parts.Add(freeForm.Trim());
+        return parts.Count == 0 ? null : string.Join(" - ", parts);
+    }
+
     private sealed class ProductItem
     {
         public Guid Id { get; set; }
         public string Name { get; set; } = "";
+        public string? Sku { get; set; }
+        public bool IsActive { get; set; }
+        public string? PrimaryBarcode { get; set; }
     }
 
     private sealed class SupplierOption
@@ -455,16 +615,28 @@
         public Guid Id { get; set; }
         public string Name { get; set; } = "";
         public bool IsActive { get; set; }
+        public string? TaxRegistrationNo { get; set; }
+        public string? Country { get; set; }
+        public string? Governorate { get; set; }
+        public string? City { get; set; }
+        public string? BuildingNo { get; set; }
+        public string? Floor { get; set; }
+        public string? Apartment { get; set; }
+        public string? StreetName { get; set; }
+        public string? PostalCode { get; set; }
+        public string? Address { get; set; }
     }
 
     private sealed class PurchaseItem
     {
         public Guid Id { get; set; }
         public string Number { get; set; } = "";
+        public string? ExternalNumber { get; set; }
         public Guid BranchId { get; set; }
         public DateTimeOffset At { get; set; }
         public string? SupplierName { get; set; }
         public decimal Total { get; set; }
+        public decimal TaxTotal { get; set; }
         public decimal CashPaid { get; set; }
     }
 
@@ -473,6 +645,7 @@
         public Guid PurchaseId { get; set; }
         public string PurchaseNo { get; set; } = "";
         public decimal Total { get; set; }
+        public decimal TaxTotal { get; set; }
     }
 
     private sealed record PurchaseLineUi(Guid ProductId, string ProductName, Guid? ProductUnitId, string? UnitName, decimal Qty, decimal UnitCost)
@@ -482,10 +655,14 @@
 
     private sealed record PurchaseReceipt(
         string PurchaseNo,
+        string ExternalNumber,
         DateTimeOffset At,
         string? SupplierName,
+        string? SupplierTaxRegistrationNo,
+        string? SupplierAddress,
         List<PurchaseReceiptLine> Lines,
         decimal Total,
+        decimal TaxTotal,
         decimal CashPaid,
         string? Note
     );
@@ -503,41 +680,5 @@
         public decimal Factor { get; set; }
         public bool IsDefault { get; set; }
         public bool IsActive { get; set; }
-    }
-
-    private async Task OnLineProductChanged(ChangeEventArgs e)
-    {
-        _lineProductId = e.Value?.ToString() ?? "";
-        _lineProductUnitId = "";
-        _lineUnits = [];
-
-        if (!Guid.TryParse(_lineProductId, out var productId) || productId == Guid.Empty)
-        {
-            return;
-        }
-
-        _busy = true;
-        try
-        {
-            _lineUnits = await Api.GetAsync<List<UnitOption>>($"catalog/products/{productId}/units");
-            var def = _lineUnits.FirstOrDefault(x => x.IsDefault && x.IsActive) ?? _lineUnits.FirstOrDefault(x => x.IsActive);
-            _lineProductUnitId = def?.Id.ToString() ?? "";
-        }
-        catch
-        {
-            _lineUnits = [];
-            _lineProductUnitId = "";
-        }
-        finally
-        {
-            _busy = false;
-        }
-    }
-
-    private void RedirectToLogin()
-    {
-        var relative = Nav.ToBaseRelativePath(Nav.Uri);
-        var target = string.IsNullOrWhiteSpace(relative) ? "/login" : $"/login?return=/{Uri.EscapeDataString(relative)}";
-        Nav.NavigateTo(target);
     }
 }

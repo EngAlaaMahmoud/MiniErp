@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using MiniErp.Api.Data;
 using MiniErp.Api.Domain;
 using MiniErp.Api.Domain.Enums;
+using MiniErp.Api.Infrastructure.Accounting;
 using MiniErp.Api.Security;
 using MiniErp.Api.Services;
 
@@ -32,7 +33,9 @@ public sealed class DevSeeder(IServiceProvider serviceProvider, ILogger<DevSeede
             {
                 Id = tenantId,
                 Name = "Demo Shop",
-                Plan = "DEV"
+                Plan = "DEV",
+                TaxRegistrationNo = "123456789",
+                Address = "Cairo, Egypt"
             });
         }
 
@@ -89,8 +92,8 @@ public sealed class DevSeeder(IServiceProvider serviceProvider, ILogger<DevSeede
             });
         }
 
-        var hasAnyRates = await db.TaxRates.IgnoreQueryFilters().AnyAsync(x => x.TenantId == tenantId, cancellationToken);
-        if (!hasAnyRates)
+        var vat14Exists = await db.TaxRates.IgnoreQueryFilters().AnyAsync(x => x.TenantId == tenantId && x.Id == vat14Id, cancellationToken);
+        if (!vat14Exists)
         {
             db.TaxRates.Add(new TaxRate
             {
@@ -168,6 +171,14 @@ public sealed class DevSeeder(IServiceProvider serviceProvider, ILogger<DevSeede
         }
         else
         {
+            var productsMissingTax = await db.Products.IgnoreQueryFilters()
+                .Where(x => x.TenantId == tenantId && x.TaxRateId == null)
+                .ToListAsync(cancellationToken);
+            foreach (var p in productsMissingTax)
+            {
+                p.TaxRateId = vat14Id;
+            }
+
             var productIds = await db.Products.IgnoreQueryFilters()
                 .Where(x => x.TenantId == tenantId)
                 .Select(x => x.Id)
@@ -233,9 +244,45 @@ public sealed class DevSeeder(IServiceProvider serviceProvider, ILogger<DevSeede
                 TenantId = tenantId,
                 Name = "Demo Supplier",
                 Phone = "01000000000",
+                TaxRegistrationNo = "SUP-123",
+                Address = "Supplier Address",
                 IsActive = true,
                 CreatedAt = DateTimeOffset.UtcNow
             });
+        }
+
+        var hasAnyCustomers = await db.Customers.IgnoreQueryFilters().AnyAsync(x => x.TenantId == tenantId, cancellationToken);
+        if (!hasAnyCustomers)
+        {
+            db.Customers.Add(new Customer
+            {
+                Id = Guid.Parse("66666666-6666-6666-6666-666666666666"),
+                TenantId = tenantId,
+                Name = "Cash Customer",
+                Phone = "01000000001",
+                TaxRegistrationNo = "CUST-123",
+                Address = "Customer Address",
+                IsActive = true,
+                CreatedAt = DateTimeOffset.UtcNow
+            });
+        }
+
+        var hasAnyChartAccounts = await db.ChartAccounts.IgnoreQueryFilters().AnyAsync(x => x.TenantId == tenantId, cancellationToken);
+        if (!hasAnyChartAccounts)
+        {
+            var now = DateTimeOffset.UtcNow;
+            db.ChartAccounts.AddRange(
+                new ChartAccount { Id = Guid.NewGuid(), TenantId = tenantId, Code = AccountingEngine.Codes.Cash, Name = "Cash", AccountType = AccountType.Asset, ParentAccountId = null, IsPosting = true, IsActive = true, CreatedAt = now },
+                new ChartAccount { Id = Guid.NewGuid(), TenantId = tenantId, Code = AccountingEngine.Codes.Bank, Name = "Bank", AccountType = AccountType.Asset, ParentAccountId = null, IsPosting = true, IsActive = true, CreatedAt = now },
+                new ChartAccount { Id = Guid.NewGuid(), TenantId = tenantId, Code = AccountingEngine.Codes.VisaClearing, Name = "Visa Clearing", AccountType = AccountType.Asset, ParentAccountId = null, IsPosting = true, IsActive = true, CreatedAt = now },
+                new ChartAccount { Id = Guid.NewGuid(), TenantId = tenantId, Code = AccountingEngine.Codes.Inventory, Name = "Inventory", AccountType = AccountType.Asset, ParentAccountId = null, IsPosting = true, IsActive = true, CreatedAt = now },
+                new ChartAccount { Id = Guid.NewGuid(), TenantId = tenantId, Code = AccountingEngine.Codes.AccountsReceivable, Name = "Accounts Receivable", AccountType = AccountType.Asset, ParentAccountId = null, IsPosting = true, IsActive = true, CreatedAt = now },
+                new ChartAccount { Id = Guid.NewGuid(), TenantId = tenantId, Code = AccountingEngine.Codes.InputVat, Name = "Input VAT", AccountType = AccountType.Asset, ParentAccountId = null, IsPosting = true, IsActive = true, CreatedAt = now },
+                new ChartAccount { Id = Guid.NewGuid(), TenantId = tenantId, Code = AccountingEngine.Codes.AccountsPayable, Name = "Accounts Payable", AccountType = AccountType.Liability, ParentAccountId = null, IsPosting = true, IsActive = true, CreatedAt = now },
+                new ChartAccount { Id = Guid.NewGuid(), TenantId = tenantId, Code = AccountingEngine.Codes.OutputVat, Name = "Output VAT", AccountType = AccountType.Liability, ParentAccountId = null, IsPosting = true, IsActive = true, CreatedAt = now },
+                new ChartAccount { Id = Guid.NewGuid(), TenantId = tenantId, Code = AccountingEngine.Codes.SalesRevenue, Name = "Sales Revenue", AccountType = AccountType.Revenue, ParentAccountId = null, IsPosting = true, IsActive = true, CreatedAt = now },
+                new ChartAccount { Id = Guid.NewGuid(), TenantId = tenantId, Code = AccountingEngine.Codes.SalesReturns, Name = "Sales Returns", AccountType = AccountType.Expense, ParentAccountId = null, IsPosting = true, IsActive = true, CreatedAt = now }
+            );
         }
 
         await db.SaveChangesAsync(cancellationToken);

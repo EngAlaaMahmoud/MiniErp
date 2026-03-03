@@ -7,7 +7,12 @@ public sealed record SaleDetailsResponse(
     DateTimeOffset At,
     decimal Total,
     IReadOnlyList<SaleDetailsItem> Items,
-    IReadOnlyList<SaleDetailsPayment> Payments
+    IReadOnlyList<SaleDetailsPayment> Payments,
+    decimal TaxTotal = 0m,
+    string? CustomerName = null,
+    string? CustomerTaxRegistrationNo = null,
+    string? CustomerAddress = null,
+    string? QrCodeBase64 = null
 );
 
 public sealed record SaleDetailsItem(

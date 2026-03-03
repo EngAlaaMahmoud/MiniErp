@@ -332,4 +332,127 @@ public sealed class ReportsController(AppDbContext db) : ControllerBase
 
         return Ok(new StockLedgerReportResponse(from, to, branchId, productId, summary, rows));
     }
+
+    [HttpGet("tax")]
+    [RequirePermission(PermissionKeys.ReportsView)]
+    public async Task<ActionResult<TaxReportResponse>> Tax(
+        [FromQuery] Guid branchId,
+        [FromQuery] DateOnly from,
+        [FromQuery] DateOnly to,
+        [FromQuery] TaxLedgerType? type,
+        CancellationToken ct)
+    {
+        if (branchId == Guid.Empty)
+        {
+            return BadRequest(new { error = "BRANCH_REQUIRED" });
+        }
+
+        if (to < from)
+        {
+            return BadRequest(new { error = "INVALID_DATE_RANGE" });
+        }
+
+        var fromAt = new DateTimeOffset(from.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
+        var toAt = new DateTimeOffset(to.AddDays(1).ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
+
+        var q = db.TaxLedger
+            .AsNoTracking()
+            .Where(x => x.BranchId == branchId && x.At >= fromAt && x.At < toAt);
+
+        if (type is not null)
+        {
+            q = q.Where(x => x.Type == type.Value);
+        }
+
+        var raw = await q
+            .GroupBy(x => new { x.Type, x.TaxRateId, x.TaxPercent })
+            .Select(g => new
+            {
+                g.Key.Type,
+                g.Key.TaxRateId,
+                g.Key.TaxPercent,
+                Amount = g.Sum(x => x.Amount)
+            })
+            .ToListAsync(ct);
+
+        var rateIds = raw.Where(x => x.TaxRateId != null).Select(x => x.TaxRateId!.Value).Distinct().ToArray();
+        var names = rateIds.Length == 0
+            ? new Dictionary<Guid, string>()
+            : await db.TaxRates
+                .AsNoTracking()
+                .Where(x => rateIds.Contains(x.Id))
+                .Select(x => new { x.Id, x.Name })
+                .ToDictionaryAsync(x => x.Id, x => x.Name, ct);
+
+        var rows = raw
+            .OrderBy(x => x.Type)
+            .ThenBy(x => x.TaxPercent)
+            .Select(x => new TaxReportRow(
+                x.Type,
+                x.TaxRateId,
+                x.TaxRateId != null && names.TryGetValue(x.TaxRateId.Value, out var n) ? n : null,
+                x.TaxPercent,
+                x.Amount))
+            .ToList();
+
+        var inputTotal = raw.Where(x => x.Type == TaxLedgerType.Input).Sum(x => x.Amount);
+        var outputTotal = raw.Where(x => x.Type == TaxLedgerType.Output).Sum(x => x.Amount);
+        var summary = new TaxReportSummary(inputTotal, outputTotal, outputTotal - inputTotal);
+
+        return Ok(new TaxReportResponse(from, to, branchId, summary, rows));
+    }
+
+    [HttpGet("trial-balance")]
+    [RequirePermission(PermissionKeys.ReportsView)]
+    public async Task<ActionResult<TrialBalanceResponse>> TrialBalance(
+        [FromQuery] Guid branchId,
+        [FromQuery] DateOnly from,
+        [FromQuery] DateOnly to,
+        CancellationToken ct)
+    {
+        if (branchId == Guid.Empty)
+        {
+            return BadRequest(new { error = "BRANCH_REQUIRED" });
+        }
+
+        if (to < from)
+        {
+            return BadRequest(new { error = "INVALID_DATE_RANGE" });
+        }
+
+        var fromAt = new DateTimeOffset(from.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
+        var toAt = new DateTimeOffset(to.AddDays(1).ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
+
+        var agg = await db.JournalEntryLines
+            .AsNoTracking()
+            .Join(db.JournalEntries, l => l.JournalEntryId, h => h.Id, (l, h) => new { l, h })
+            .Where(x => x.h.BranchId == branchId && x.h.At >= fromAt && x.h.At < toAt)
+            .GroupBy(x => x.l.AccountId)
+            .Select(g => new
+            {
+                AccountId = g.Key,
+                Debit = g.Sum(x => x.l.Debit),
+                Credit = g.Sum(x => x.l.Credit)
+            })
+            .ToListAsync(ct);
+
+        var accountIds = agg.Select(x => x.AccountId).Distinct().ToArray();
+        var accounts = await db.ChartAccounts
+            .AsNoTracking()
+            .Where(x => accountIds.Contains(x.Id))
+            .Select(x => new { x.Id, x.Code, x.Name })
+            .ToDictionaryAsync(x => x.Id, x => new { x.Code, x.Name }, ct);
+
+        var rows = agg
+            .OrderBy(x => accounts.ContainsKey(x.AccountId) ? accounts[x.AccountId].Code : "")
+            .Select(x =>
+            {
+                accounts.TryGetValue(x.AccountId, out var acc);
+                return new TrialBalanceRow(x.AccountId, acc?.Code ?? "?", acc?.Name ?? "Unknown", x.Debit, x.Credit);
+            })
+            .ToList();
+
+        var summary = new TrialBalanceSummary(rows.Sum(x => x.Debit), rows.Sum(x => x.Credit));
+        return Ok(new TrialBalanceResponse(from, to, branchId, summary, rows));
+    }
 }

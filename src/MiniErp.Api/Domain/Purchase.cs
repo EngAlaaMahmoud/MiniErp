@@ -10,10 +10,13 @@ public sealed class Purchase : ITenantScoped
     public Guid UserId { get; set; }
 
     public string Number { get; set; } = "";
+    public string? ExternalNumber { get; set; }
     public DateTimeOffset At { get; set; }
 
     public Guid? SupplierId { get; set; }
     public string? SupplierName { get; set; }
+    public string? SupplierTaxRegistrationNo { get; set; }
+    public string? SupplierAddress { get; set; }
 
     public decimal Total { get; set; }
     public decimal TaxTotal { get; set; }

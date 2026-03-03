@@ -5,8 +5,15 @@ namespace MiniErp.Api.Contracts.Purchases;
 public sealed class CreatePurchaseRequest
 {
     public Guid BranchId { get; set; }
+    public DateTimeOffset? At { get; set; }
+
+    // Vendor invoice/reference number (as printed on the supplier invoice).
+    public string? ExternalNumber { get; set; }
+
     public Guid? SupplierId { get; set; }
     public string? SupplierName { get; set; }
+    public string? SupplierTaxRegistrationNo { get; set; }
+    public string? SupplierAddress { get; set; }
 
     [MinLength(1)]
     public List<CreatePurchaseLine> Items { get; set; } = [];

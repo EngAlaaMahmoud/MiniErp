@@ -5,7 +5,11 @@ public sealed record CreateSaleRequest(
     Guid? CustomerId,
     IReadOnlyList<SaleItemRequest> Items,
     IReadOnlyList<PaymentRequest> Payments,
-    string? Note
+    string? Note,
+    string? CustomerName = null,
+    string? CustomerTaxRegistrationNo = null,
+    string? CustomerAddress = null,
+    DateTimeOffset? At = null
 );
 
 public sealed record SaleItemRequest(

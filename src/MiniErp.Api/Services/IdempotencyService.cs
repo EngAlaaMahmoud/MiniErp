@@ -237,6 +237,12 @@ public sealed class IdempotencyService(ILogger<IdempotencyService> logger)
             .IgnoreQueryFilters()
             .SingleAsync(x => x.TenantId == tenantId && x.Id == rowId, ct);
 
+        if (row.Status != IdempotencyStatus.InProgress)
+        {
+            await tx.CommitAsync(ct);
+            return;
+        }
+
         row.Status = IdempotencyStatus.Completed;
         row.CompletedAt = now;
         row.LockedUntil = null;
@@ -261,6 +267,12 @@ public sealed class IdempotencyService(ILogger<IdempotencyService> logger)
         var row = await db.IdempotencyKeys
             .IgnoreQueryFilters()
             .SingleAsync(x => x.TenantId == tenantId && x.Id == rowId, ct);
+
+        if (row.Status != IdempotencyStatus.InProgress)
+        {
+            await tx.CommitAsync(ct);
+            return;
+        }
 
         row.Status = IdempotencyStatus.Failed;
         row.CompletedAt = now;

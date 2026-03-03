@@ -32,7 +32,21 @@ public sealed class CustomersController(AppDbContext db) : ControllerBase
         var items = await query
             .OrderBy(x => x.Name)
             .Take(500)
-            .Select(x => new CustomerListItem(x.Id, x.Name, x.Phone, x.IsActive))
+            .Select(x => new CustomerListItem(
+                x.Id,
+                x.Name,
+                x.Phone,
+                x.TaxRegistrationNo,
+                x.Country,
+                x.Governorate,
+                x.City,
+                x.BuildingNo,
+                x.Floor,
+                x.Apartment,
+                x.StreetName,
+                x.PostalCode,
+                x.Address,
+                x.IsActive))
             .ToListAsync(ct);
 
         return Ok(items);
@@ -53,19 +67,53 @@ public sealed class CustomersController(AppDbContext db) : ControllerBase
             return BadRequest(new { error = "NAME_REQUIRED" });
         }
 
+        var taxNo = string.IsNullOrWhiteSpace(request.TaxRegistrationNo) ? null : request.TaxRegistrationNo.Trim();
+        if (!string.IsNullOrWhiteSpace(taxNo))
+        {
+            var dup = await db.Customers.AnyAsync(x => x.TaxRegistrationNo == taxNo, ct);
+            if (dup)
+            {
+                return Conflict(new { error = "DUPLICATE_TAX_NUMBER" });
+            }
+        }
+
         var entity = new Customer
         {
             Id = Guid.NewGuid(),
             TenantId = tenantId,
             Name = request.Name.Trim(),
             Phone = string.IsNullOrWhiteSpace(request.Phone) ? null : request.Phone.Trim(),
+            TaxRegistrationNo = taxNo,
+            Country = string.IsNullOrWhiteSpace(request.Country) ? null : request.Country.Trim(),
+            Governorate = string.IsNullOrWhiteSpace(request.Governorate) ? null : request.Governorate.Trim(),
+            City = string.IsNullOrWhiteSpace(request.City) ? null : request.City.Trim(),
+            BuildingNo = string.IsNullOrWhiteSpace(request.BuildingNo) ? null : request.BuildingNo.Trim(),
+            Floor = string.IsNullOrWhiteSpace(request.Floor) ? null : request.Floor.Trim(),
+            Apartment = string.IsNullOrWhiteSpace(request.Apartment) ? null : request.Apartment.Trim(),
+            StreetName = string.IsNullOrWhiteSpace(request.StreetName) ? null : request.StreetName.Trim(),
+            PostalCode = string.IsNullOrWhiteSpace(request.PostalCode) ? null : request.PostalCode.Trim(),
+            Address = string.IsNullOrWhiteSpace(request.Address) ? null : request.Address.Trim(),
             IsActive = request.IsActive,
             CreatedAt = DateTimeOffset.UtcNow
         };
         db.Customers.Add(entity);
         await db.SaveChangesAsync(ct);
 
-        return CreatedAtAction(nameof(List), new { id = entity.Id }, new CustomerListItem(entity.Id, entity.Name, entity.Phone, entity.IsActive));
+        return CreatedAtAction(nameof(List), new { id = entity.Id }, new CustomerListItem(
+            entity.Id,
+            entity.Name,
+            entity.Phone,
+            entity.TaxRegistrationNo,
+            entity.Country,
+            entity.Governorate,
+            entity.City,
+            entity.BuildingNo,
+            entity.Floor,
+            entity.Apartment,
+            entity.StreetName,
+            entity.PostalCode,
+            entity.Address,
+            entity.IsActive));
     }
 
     [HttpPut("{id:guid}")]
@@ -88,8 +136,28 @@ public sealed class CustomersController(AppDbContext db) : ControllerBase
             return NotFound(new { error = "NOT_FOUND" });
         }
 
+        var taxNo = string.IsNullOrWhiteSpace(request.TaxRegistrationNo) ? null : request.TaxRegistrationNo.Trim();
+        if (!string.IsNullOrWhiteSpace(taxNo))
+        {
+            var dup = await db.Customers.AnyAsync(x => x.Id != id && x.TaxRegistrationNo == taxNo, ct);
+            if (dup)
+            {
+                return Conflict(new { error = "DUPLICATE_TAX_NUMBER" });
+            }
+        }
+
         entity.Name = request.Name.Trim();
         entity.Phone = string.IsNullOrWhiteSpace(request.Phone) ? null : request.Phone.Trim();
+        entity.TaxRegistrationNo = taxNo;
+        entity.Country = string.IsNullOrWhiteSpace(request.Country) ? null : request.Country.Trim();
+        entity.Governorate = string.IsNullOrWhiteSpace(request.Governorate) ? null : request.Governorate.Trim();
+        entity.City = string.IsNullOrWhiteSpace(request.City) ? null : request.City.Trim();
+        entity.BuildingNo = string.IsNullOrWhiteSpace(request.BuildingNo) ? null : request.BuildingNo.Trim();
+        entity.Floor = string.IsNullOrWhiteSpace(request.Floor) ? null : request.Floor.Trim();
+        entity.Apartment = string.IsNullOrWhiteSpace(request.Apartment) ? null : request.Apartment.Trim();
+        entity.StreetName = string.IsNullOrWhiteSpace(request.StreetName) ? null : request.StreetName.Trim();
+        entity.PostalCode = string.IsNullOrWhiteSpace(request.PostalCode) ? null : request.PostalCode.Trim();
+        entity.Address = string.IsNullOrWhiteSpace(request.Address) ? null : request.Address.Trim();
         entity.IsActive = request.IsActive;
 
         await db.SaveChangesAsync(ct);

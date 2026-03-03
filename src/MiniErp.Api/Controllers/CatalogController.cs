@@ -32,7 +32,29 @@ public sealed class CatalogController(AppDbContext db) : ControllerBase
         var items = await query
             .OrderBy(x => x.Name)
             .Take(200)
-            .Select(x => new ProductListItem(x.Id, x.Name, x.Sku, x.Price, x.Cost, x.CategoryId, x.TaxRateId, x.SalesTaxTypeId, x.ReorderLevel, x.IsActive))
+            .Select(x => new ProductListItem(
+                x.Id,
+                x.Name,
+                x.Sku,
+                x.Price,
+                x.Cost,
+                x.CategoryId,
+                x.TaxRateId,
+                x.SalesTaxTypeId,
+                x.ReorderLevel,
+                x.IsActive,
+                db.Barcodes
+                    .Where(b => b.ProductId == x.Id)
+                    .OrderBy(b => b.Code)
+                    .Select(b => b.Code)
+                    .FirstOrDefault(),
+                x.BrandName,
+                x.Description,
+                x.DefaultDiscount,
+                db.ProductUnits
+                    .Where(u => u.ProductId == x.Id && u.IsDefault)
+                    .Select(u => u.Name)
+                    .FirstOrDefault()))
             .ToListAsync(ct);
 
         return Ok(items);
@@ -53,14 +75,44 @@ public sealed class CatalogController(AppDbContext db) : ControllerBase
             return BadRequest(new { error = "NAME_REQUIRED" });
         }
 
+        if (request.Price < 0 || request.Cost < 0)
+        {
+            return BadRequest(new { error = "NEGATIVE_PRICE_NOT_ALLOWED" });
+        }
+
+        if (request.TaxRateId is null || request.TaxRateId.Value == Guid.Empty)
+        {
+            return BadRequest(new { error = "TAX_RATE_REQUIRED" });
+        }
+
+        if (request.CategoryId is null || request.CategoryId.Value == Guid.Empty)
+        {
+            return BadRequest(new { error = "CATEGORY_REQUIRED" });
+        }
+
+        var taxOk = await db.TaxRates.AnyAsync(x => x.Id == request.TaxRateId.Value && x.IsActive, ct);
+        if (!taxOk)
+        {
+            return BadRequest(new { error = "INVALID_TAX_RATE" });
+        }
+
+        var catOk = await db.Categories.AnyAsync(x => x.Id == request.CategoryId.Value && x.IsActive, ct);
+        if (!catOk)
+        {
+            return BadRequest(new { error = "INVALID_CATEGORY" });
+        }
+
         var product = new Product
         {
             Id = Guid.NewGuid(),
             TenantId = tenantId,
             Name = request.Name.Trim(),
-            Sku = string.IsNullOrWhiteSpace(request.Sku) ? null : request.Sku.Trim(),
+            Sku = string.IsNullOrWhiteSpace(request.Sku) ? null : request.Sku.Trim().ToUpperInvariant(),
+            BrandName = string.IsNullOrWhiteSpace(request.BrandName) ? null : request.BrandName.Trim(),
+            Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim(),
             Price = request.Price,
             Cost = request.Cost,
+            DefaultDiscount = request.DefaultDiscount < 0 ? 0 : request.DefaultDiscount,
             CategoryId = request.CategoryId,
             TaxRateId = request.TaxRateId,
             SalesTaxTypeId = request.SalesTaxTypeId,
@@ -69,20 +121,50 @@ public sealed class CatalogController(AppDbContext db) : ControllerBase
         };
 
         db.Products.Add(product);
+        var defaultUnitName = string.IsNullOrWhiteSpace(request.DefaultUnitName) ? "Unit" : request.DefaultUnitName.Trim();
+        if (defaultUnitName.Length > 50)
+        {
+            defaultUnitName = defaultUnitName[..50];
+        }
         db.ProductUnits.Add(new ProductUnit
         {
             Id = Guid.NewGuid(),
             TenantId = tenantId,
             ProductId = product.Id,
-            Name = "Unit",
+            Name = defaultUnitName,
             Factor = 1m,
             IsDefault = true,
             IsActive = true,
             CreatedAt = DateTimeOffset.UtcNow
         });
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException)
+        {
+            return Conflict(new { error = "SKU_ALREADY_EXISTS" });
+        }
 
-        return CreatedAtAction(nameof(GetProducts), new { id = product.Id }, new ProductListItem(product.Id, product.Name, product.Sku, product.Price, product.Cost, product.CategoryId, product.TaxRateId, product.SalesTaxTypeId, product.ReorderLevel, product.IsActive));
+        return CreatedAtAction(
+            nameof(GetProducts),
+            new { id = product.Id },
+            new ProductListItem(
+                product.Id,
+                product.Name,
+                product.Sku,
+                product.Price,
+                product.Cost,
+                product.CategoryId,
+                product.TaxRateId,
+                product.SalesTaxTypeId,
+                product.ReorderLevel,
+                product.IsActive,
+                PrimaryBarcode: null,
+                BrandName: product.BrandName,
+                Description: product.Description,
+                DefaultDiscount: product.DefaultDiscount,
+                DefaultUnitName: defaultUnitName));
     }
 
     [HttpPut("products/{id:guid}")]
@@ -105,18 +187,70 @@ public sealed class CatalogController(AppDbContext db) : ControllerBase
             return BadRequest(new { error = "NAME_REQUIRED" });
         }
 
+        if (request.Price < 0 || request.Cost < 0)
+        {
+            return BadRequest(new { error = "NEGATIVE_PRICE_NOT_ALLOWED" });
+        }
+
+        if (request.TaxRateId is null || request.TaxRateId.Value == Guid.Empty)
+        {
+            return BadRequest(new { error = "TAX_RATE_REQUIRED" });
+        }
+
+        if (request.CategoryId is null || request.CategoryId.Value == Guid.Empty)
+        {
+            return BadRequest(new { error = "CATEGORY_REQUIRED" });
+        }
+
+        var taxOk = await db.TaxRates.AnyAsync(x => x.Id == request.TaxRateId.Value && x.IsActive, ct);
+        if (!taxOk)
+        {
+            return BadRequest(new { error = "INVALID_TAX_RATE" });
+        }
+
+        var catOk = await db.Categories.AnyAsync(x => x.Id == request.CategoryId.Value && x.IsActive, ct);
+        if (!catOk)
+        {
+            return BadRequest(new { error = "INVALID_CATEGORY" });
+        }
+
         product.Name = request.Name.Trim();
-        product.Sku = string.IsNullOrWhiteSpace(request.Sku) ? null : request.Sku.Trim();
+        product.Sku = string.IsNullOrWhiteSpace(request.Sku) ? null : request.Sku.Trim().ToUpperInvariant();
+        product.BrandName = string.IsNullOrWhiteSpace(request.BrandName) ? null : request.BrandName.Trim();
+        product.Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim();
         product.Price = request.Price;
         product.Cost = request.Cost;
+        product.DefaultDiscount = request.DefaultDiscount < 0 ? 0 : request.DefaultDiscount;
         product.CategoryId = request.CategoryId;
         product.TaxRateId = request.TaxRateId;
         product.SalesTaxTypeId = request.SalesTaxTypeId;
         product.ReorderLevel = request.ReorderLevel;
         product.IsActive = request.IsActive;
 
-        await db.SaveChangesAsync(ct);
-        return NoContent();
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(request.DefaultUnitName))
+            {
+                var name = request.DefaultUnitName.Trim();
+                if (name.Length > 50)
+                {
+                    name = name[..50];
+                }
+
+                var unit = await db.ProductUnits.SingleOrDefaultAsync(x => x.ProductId == product.Id && x.IsDefault, ct);
+                if (unit is not null)
+                {
+                    unit.Name = name;
+                }
+            }
+
+            await db.SaveChangesAsync(ct);
+            return NoContent();
+        }
+        catch (DbUpdateException)
+        {
+            return Conflict(new { error = "SKU_ALREADY_EXISTS" });
+        }
     }
 
     [HttpGet("products/{productId:guid}/units")]
@@ -273,7 +407,7 @@ public sealed class CatalogController(AppDbContext db) : ControllerBase
         var items = await db.Categories
             .OrderBy(x => x.Name)
             .Take(500)
-            .Select(x => new CategoryListItem(x.Id, x.Name, x.IsActive))
+            .Select(x => new CategoryListItem(x.Id, x.Name, x.ParentId, x.IsActive))
             .ToListAsync(ct);
 
         return Ok(items);
@@ -294,11 +428,24 @@ public sealed class CatalogController(AppDbContext db) : ControllerBase
             return BadRequest(new { error = "NAME_REQUIRED" });
         }
 
+        Guid? parentId = null;
+        if (request.ParentId is not null && request.ParentId.Value != Guid.Empty)
+        {
+            var parentExists = await db.Categories.AnyAsync(x => x.Id == request.ParentId.Value, ct);
+            if (!parentExists)
+            {
+                return BadRequest(new { error = "INVALID_PARENT" });
+            }
+
+            parentId = request.ParentId.Value;
+        }
+
         var entity = new Category
         {
             Id = Guid.NewGuid(),
             TenantId = tenantId,
             Name = request.Name.Trim(),
+            ParentId = parentId,
             IsActive = request.IsActive,
             CreatedAt = DateTimeOffset.UtcNow
         };
@@ -313,7 +460,7 @@ public sealed class CatalogController(AppDbContext db) : ControllerBase
             return Conflict(new { error = "DUPLICATE_NAME" });
         }
 
-        return CreatedAtAction(nameof(GetCategories), new { id = entity.Id }, new CategoryListItem(entity.Id, entity.Name, entity.IsActive));
+        return CreatedAtAction(nameof(GetCategories), new { id = entity.Id }, new CategoryListItem(entity.Id, entity.Name, entity.ParentId, entity.IsActive));
     }
 
     [HttpPut("categories/{id:guid}")]
@@ -336,7 +483,25 @@ public sealed class CatalogController(AppDbContext db) : ControllerBase
             return NotFound(new { error = "NOT_FOUND" });
         }
 
+        Guid? parentId = null;
+        if (request.ParentId is not null && request.ParentId.Value != Guid.Empty)
+        {
+            if (request.ParentId.Value == id)
+            {
+                return BadRequest(new { error = "INVALID_PARENT" });
+            }
+
+            var parentExists = await db.Categories.AnyAsync(x => x.Id == request.ParentId.Value, ct);
+            if (!parentExists)
+            {
+                return BadRequest(new { error = "INVALID_PARENT" });
+            }
+
+            parentId = request.ParentId.Value;
+        }
+
         entity.Name = request.Name.Trim();
+        entity.ParentId = parentId;
         entity.IsActive = request.IsActive;
 
         try

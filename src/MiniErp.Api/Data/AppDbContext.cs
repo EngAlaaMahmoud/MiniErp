@@ -33,7 +33,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options, ITenant
 
     public DbSet<CashTxn> CashTxns => Set<CashTxn>();
     public DbSet<ChartAccount> ChartAccounts => Set<ChartAccount>();
+    public DbSet<JournalEntry> JournalEntries => Set<JournalEntry>();
+    public DbSet<JournalEntryLine> JournalEntryLines => Set<JournalEntryLine>();
     public DbSet<PrintJob> PrintJobs => Set<PrintJob>();
+    public DbSet<TaxLedgerEntry> TaxLedger => Set<TaxLedgerEntry>();
 
     public DbSet<SalesTaxType> SalesTaxTypes => Set<SalesTaxType>();
     public DbSet<Supplier> Suppliers => Set<Supplier>();
@@ -50,12 +53,21 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options, ITenant
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        var taxRegistrationNoNotNullFilter = Database.ProviderName switch
+        {
+            "Microsoft.EntityFrameworkCore.SqlServer" => "[TaxRegistrationNo] IS NOT NULL",
+            "Npgsql.EntityFrameworkCore.PostgreSQL" => "\"TaxRegistrationNo\" IS NOT NULL",
+            _ => null
+        };
+
         modelBuilder.Entity<Tenant>(b =>
         {
             b.ToTable("Tenants");
             b.HasKey(x => x.Id);
             b.Property(x => x.Name).HasMaxLength(200).IsRequired();
             b.Property(x => x.Plan).HasMaxLength(50);
+            b.Property(x => x.TaxRegistrationNo).HasMaxLength(50);
+            b.Property(x => x.Address).HasMaxLength(500);
         });
 
         modelBuilder.Entity<Branch>(b =>
@@ -93,13 +105,17 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options, ITenant
             b.ToTable("Products");
             b.HasKey(x => x.Id);
             b.HasIndex(x => new { x.TenantId, x.Name });
+            b.HasIndex(x => new { x.TenantId, x.Sku }).IsUnique();
             b.HasIndex(x => new { x.TenantId, x.CategoryId });
             b.HasIndex(x => new { x.TenantId, x.TaxRateId });
             b.HasIndex(x => new { x.TenantId, x.SalesTaxTypeId });
             b.Property(x => x.Name).HasMaxLength(300).IsRequired();
             b.Property(x => x.Sku).HasMaxLength(100);
+            b.Property(x => x.BrandName).HasMaxLength(200);
+            b.Property(x => x.Description).HasMaxLength(500);
             b.Property(x => x.Cost).HasPrecision(18, 3);
             b.Property(x => x.Price).HasPrecision(18, 3);
+            b.Property(x => x.DefaultDiscount).HasPrecision(18, 3);
             b.Property(x => x.ReorderLevel).HasPrecision(18, 3);
             b.HasQueryFilter(x => x.TenantId == TenantId);
         });
@@ -120,6 +136,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options, ITenant
             b.ToTable("Categories");
             b.HasKey(x => x.Id);
             b.HasIndex(x => new { x.TenantId, x.Name }).IsUnique();
+            b.HasIndex(x => new { x.TenantId, x.ParentId });
             b.Property(x => x.Name).HasMaxLength(200).IsRequired();
             b.HasQueryFilter(x => x.TenantId == TenantId);
         });
@@ -139,8 +156,19 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options, ITenant
             b.ToTable("Customers");
             b.HasKey(x => x.Id);
             b.HasIndex(x => new { x.TenantId, x.Name });
+            b.HasIndex(x => new { x.TenantId, x.TaxRegistrationNo }).IsUnique().HasFilter(taxRegistrationNoNotNullFilter);
             b.Property(x => x.Name).HasMaxLength(300).IsRequired();
             b.Property(x => x.Phone).HasMaxLength(50);
+            b.Property(x => x.TaxRegistrationNo).HasMaxLength(50);
+            b.Property(x => x.Country).HasMaxLength(100);
+            b.Property(x => x.Governorate).HasMaxLength(100);
+            b.Property(x => x.City).HasMaxLength(100);
+            b.Property(x => x.BuildingNo).HasMaxLength(50);
+            b.Property(x => x.Floor).HasMaxLength(50);
+            b.Property(x => x.Apartment).HasMaxLength(50);
+            b.Property(x => x.StreetName).HasMaxLength(200);
+            b.Property(x => x.PostalCode).HasMaxLength(20);
+            b.Property(x => x.Address).HasMaxLength(500);
             b.HasQueryFilter(x => x.TenantId == TenantId);
         });
 
@@ -162,9 +190,12 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options, ITenant
             b.HasIndex(x => new { x.TenantId, x.Number }).IsUnique();
             b.Property(x => x.Number).HasMaxLength(50).IsRequired();
             b.Property(x => x.CustomerName).HasMaxLength(300);
+            b.Property(x => x.CustomerTaxRegistrationNo).HasMaxLength(50);
+            b.Property(x => x.CustomerAddress).HasMaxLength(1000);
             b.Property(x => x.Total).HasPrecision(18, 3);
             b.Property(x => x.TaxTotal).HasPrecision(18, 3);
             b.Property(x => x.Status).HasConversion<int>();
+            b.Property(x => x.QrCodeBase64);
             b.HasQueryFilter(x => x.TenantId == TenantId);
         });
 
@@ -271,6 +302,31 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options, ITenant
             b.HasQueryFilter(x => x.TenantId == TenantId);
         });
 
+        modelBuilder.Entity<JournalEntry>(b =>
+        {
+            b.ToTable("JournalEntries");
+            b.HasKey(x => x.Id);
+            b.HasIndex(x => new { x.TenantId, x.BranchId, x.At });
+            b.HasIndex(x => new { x.TenantId, x.SourceType, x.SourceId }).IsUnique();
+            b.Property(x => x.SourceType).HasMaxLength(50).IsRequired();
+            b.Property(x => x.Description).HasMaxLength(500);
+            b.Property(x => x.TotalDebit).HasPrecision(18, 4);
+            b.Property(x => x.TotalCredit).HasPrecision(18, 4);
+            b.HasQueryFilter(x => x.TenantId == TenantId);
+        });
+
+        modelBuilder.Entity<JournalEntryLine>(b =>
+        {
+            b.ToTable("JournalEntryLines");
+            b.HasKey(x => x.Id);
+            b.HasIndex(x => new { x.TenantId, x.JournalEntryId });
+            b.HasIndex(x => new { x.TenantId, x.AccountId });
+            b.Property(x => x.Debit).HasPrecision(18, 4);
+            b.Property(x => x.Credit).HasPrecision(18, 4);
+            b.Property(x => x.Note).HasMaxLength(500);
+            b.HasQueryFilter(x => x.TenantId == TenantId);
+        });
+
         modelBuilder.Entity<PrintJob>(b =>
         {
             b.ToTable("PrintJobs");
@@ -345,8 +401,19 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options, ITenant
             b.ToTable("Suppliers");
             b.HasKey(x => x.Id);
             b.HasIndex(x => new { x.TenantId, x.Name });
+            b.HasIndex(x => new { x.TenantId, x.TaxRegistrationNo }).IsUnique().HasFilter(taxRegistrationNoNotNullFilter);
             b.Property(x => x.Name).HasMaxLength(300).IsRequired();
             b.Property(x => x.Phone).HasMaxLength(50);
+            b.Property(x => x.TaxRegistrationNo).HasMaxLength(50);
+            b.Property(x => x.Country).HasMaxLength(100);
+            b.Property(x => x.Governorate).HasMaxLength(100);
+            b.Property(x => x.City).HasMaxLength(100);
+            b.Property(x => x.BuildingNo).HasMaxLength(50);
+            b.Property(x => x.Floor).HasMaxLength(50);
+            b.Property(x => x.Apartment).HasMaxLength(50);
+            b.Property(x => x.StreetName).HasMaxLength(200);
+            b.Property(x => x.PostalCode).HasMaxLength(20);
+            b.Property(x => x.Address).HasMaxLength(500);
             b.HasQueryFilter(x => x.TenantId == TenantId);
         });
 
@@ -358,7 +425,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options, ITenant
             b.HasIndex(x => new { x.TenantId, x.Number }).IsUnique();
             b.HasIndex(x => new { x.TenantId, x.SupplierId });
             b.Property(x => x.Number).HasMaxLength(50).IsRequired();
+            b.Property(x => x.ExternalNumber).HasMaxLength(50);
             b.Property(x => x.SupplierName).HasMaxLength(300);
+            b.Property(x => x.SupplierTaxRegistrationNo).HasMaxLength(50);
+            b.Property(x => x.SupplierAddress).HasMaxLength(1000);
             b.Property(x => x.Total).HasPrecision(18, 3);
             b.Property(x => x.TaxTotal).HasPrecision(18, 3);
             b.Property(x => x.CashPaid).HasPrecision(18, 3);
@@ -407,6 +477,20 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options, ITenant
             b.HasKey(x => new { x.TenantId, x.UserId });
             b.HasIndex(x => new { x.TenantId, x.UserId });
             b.Property(x => x.UpdatedAt).IsRequired();
+            b.HasQueryFilter(x => x.TenantId == TenantId);
+        });
+
+        modelBuilder.Entity<TaxLedgerEntry>(b =>
+        {
+            b.ToTable("TaxLedger");
+            b.HasKey(x => x.Id);
+            b.HasIndex(x => new { x.TenantId, x.BranchId, x.At });
+            b.HasIndex(x => new { x.TenantId, x.Type, x.At });
+            b.HasIndex(x => new { x.TenantId, x.RefType, x.RefId, x.Type, x.TaxRateId, x.TaxPercent }).IsUnique();
+            b.Property(x => x.Type).HasConversion<int>();
+            b.Property(x => x.RefType).HasMaxLength(50).IsRequired();
+            b.Property(x => x.TaxPercent).HasPrecision(9, 6);
+            b.Property(x => x.Amount).HasPrecision(18, 4);
             b.HasQueryFilter(x => x.TenantId == TenantId);
         });
     }

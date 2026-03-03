@@ -22,7 +22,7 @@ public sealed class UpdateTaxRateRequest
     public bool IsActive { get; set; }
 }
 
-public sealed record TaxReportResponse(
+public sealed record TaxSummaryResponse(
     DateTimeOffset From,
     DateTimeOffset To,
     Guid? BranchId,
@@ -30,4 +30,3 @@ public sealed record TaxReportResponse(
     decimal PurchaseTax,
     decimal NetTax
 );
-

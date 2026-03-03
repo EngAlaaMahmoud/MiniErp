@@ -7,6 +7,9 @@ using MiniErp.Api.Data;
 using MiniErp.Api.Domain;
 using MiniErp.Api.Domain.Enums;
 using MiniErp.Api.Infrastructure.Inventory;
+using MiniErp.Api.Infrastructure.Accounting;
+using MiniErp.Api.Infrastructure.Qr;
+using MiniErp.Api.Infrastructure.Tax;
 using MiniErp.Api.Security;
 using MiniErp.Api.Services;
 using Npgsql;
@@ -16,7 +19,7 @@ namespace MiniErp.Api.Controllers;
 [ApiController]
 [Route("pos")]
 [Authorize]
-public sealed class PosController(AppDbContext db, IdempotencyService idempotencyService) : ControllerBase
+public sealed class PosController(AppDbContext db, IdempotencyService idempotencyService, IConfiguration configuration) : ControllerBase
 {
     [HttpGet("sales")]
     [RequirePermission(PermissionKeys.SalesView)]
@@ -130,7 +133,19 @@ public sealed class PosController(AppDbContext db, IdempotencyService idempotenc
             .Select(x => new SaleDetailsPayment(x.Method, x.Amount, x.ReferenceNo))
             .ToListAsync(ct);
 
-        return Ok(new SaleDetailsResponse(sale.Id, sale.Number, sale.BranchId, sale.At, sale.Total, items, payments));
+        return Ok(new SaleDetailsResponse(
+            sale.Id,
+            sale.Number,
+            sale.BranchId,
+            sale.At,
+            sale.Total,
+            items,
+            payments,
+            TaxTotal: sale.TaxTotal,
+            CustomerName: sale.CustomerName,
+            CustomerTaxRegistrationNo: sale.CustomerTaxRegistrationNo,
+            CustomerAddress: sale.CustomerAddress,
+            QrCodeBase64: sale.QrCodeBase64));
     }
 
     [HttpGet("sales/by-number/{saleNo}")]
@@ -181,7 +196,8 @@ public sealed class PosController(AppDbContext db, IdempotencyService idempotenc
         var key = rawKey.ToString().Trim();
         var endpoint = "POST:/pos/sales";
         var requestHash = IdempotencyService.HashRequest(request);
-        var ttl = TimeSpan.FromMinutes(3);
+        var ttlMinutes = configuration.GetValue("Idempotency:PosTtlMinutes", 3);
+        var ttl = TimeSpan.FromMinutes(Math.Clamp(ttlMinutes, 1, 30));
 
         return await idempotencyService.ExecuteAsync(
             db,
@@ -214,6 +230,8 @@ public sealed class PosController(AppDbContext db, IdempotencyService idempotenc
 
                 Guid? customerId = null;
                 string? customerName = null;
+                string? customerTaxRegistrationNo = null;
+                string? customerAddress = null;
                 if (request.CustomerId is not null && request.CustomerId.Value != Guid.Empty)
                 {
                     var customer = await db.Customers.SingleOrDefaultAsync(x => x.Id == request.CustomerId.Value && x.IsActive, innerCt);
@@ -224,6 +242,23 @@ public sealed class PosController(AppDbContext db, IdempotencyService idempotenc
 
                     customerId = customer.Id;
                     customerName = customer.Name;
+                    customerTaxRegistrationNo = customer.TaxRegistrationNo;
+                    customerAddress = BuildPartyAddress(
+                        customer.Country,
+                        customer.Governorate,
+                        customer.City,
+                        customer.BuildingNo,
+                        customer.Floor,
+                        customer.Apartment,
+                        customer.StreetName,
+                        customer.PostalCode,
+                        customer.Address);
+                }
+                else
+                {
+                    customerName = string.IsNullOrWhiteSpace(request.CustomerName) ? null : request.CustomerName.Trim();
+                    customerTaxRegistrationNo = string.IsNullOrWhiteSpace(request.CustomerTaxRegistrationNo) ? null : request.CustomerTaxRegistrationNo.Trim();
+                    customerAddress = string.IsNullOrWhiteSpace(request.CustomerAddress) ? null : request.CustomerAddress.Trim();
                 }
 
                 var productIds = request.Items.Select(x => x.ProductId).Distinct().ToArray();
@@ -240,6 +275,11 @@ public sealed class PosController(AppDbContext db, IdempotencyService idempotenc
                 if (products.Any(x => !x.IsActive))
                 {
                     return (StatusCodes.Status400BadRequest, (object)new { error = "INACTIVE_PRODUCT" });
+                }
+
+                if (products.Any(x => x.TaxRateId == null))
+                {
+                    return (StatusCodes.Status400BadRequest, (object)new { error = "PRODUCT_TAX_NOT_SET" });
                 }
 
                 var unitIds = request.Items.Where(x => x.ProductUnitId != null).Select(x => x.ProductUnitId!.Value).Distinct().ToArray();
@@ -285,6 +325,36 @@ public sealed class PosController(AppDbContext db, IdempotencyService idempotenc
                     return (StatusCodes.Status400BadRequest, (object)new { error = "INVALID_LINE" });
                 }
 
+                var allowNegative = configuration.GetValue("Inventory:AllowNegativeStock", false);
+                if (!allowNegative)
+                {
+                    var requiredByProduct = lines
+                        .GroupBy(x => x.Item.ProductId)
+                        .ToDictionary(g => g.Key, g => g.Sum(x => x.QtyBase == 0 ? x.Item.Qty : x.QtyBase));
+
+                    var productIdsForStock = requiredByProduct.Keys.ToArray();
+                    var balances = await db.StockBalances
+                        .AsNoTracking()
+                        .Where(x => x.BranchId == request.BranchId && productIdsForStock.Contains(x.ProductId))
+                        .Select(x => new { x.ProductId, x.Qty })
+                        .ToListAsync(innerCt);
+
+                    var balanceByProduct = balances.ToDictionary(x => x.ProductId, x => x.Qty);
+                    var insufficient = requiredByProduct
+                        .Select(kvp =>
+                        {
+                            balanceByProduct.TryGetValue(kvp.Key, out var available);
+                            return new { ProductId = kvp.Key, Required = kvp.Value, Available = available };
+                        })
+                        .Where(x => x.Available < x.Required)
+                        .ToList();
+
+                    if (insufficient.Count != 0)
+                    {
+                        return (StatusCodes.Status400BadRequest, (object)new { error = "INSUFFICIENT_STOCK", items = insufficient });
+                    }
+                }
+
                 var total = lines.Sum(x => x.LineTotal);
                 var paymentsTotal = request.Payments.Sum(x => x.Amount);
 
@@ -313,8 +383,10 @@ public sealed class PosController(AppDbContext db, IdempotencyService idempotenc
                     DeviceId = deviceId,
                     CustomerId = customerId,
                     CustomerName = customerName,
+                    CustomerTaxRegistrationNo = customerTaxRegistrationNo,
+                    CustomerAddress = customerAddress,
                     Number = saleNo,
-                    At = now,
+                    At = request.At ?? now,
                     Total = total,
                     TaxTotal = 0,
                     Status = SaleStatus.Completed
@@ -379,6 +451,22 @@ public sealed class PosController(AppDbContext db, IdempotencyService idempotenc
                     .ToList();
                 db.Payments.AddRange(payments);
 
+                var paymentsTotalApplied = payments.Sum(x => x.Amount);
+                var change = decimal.Round(paymentsTotalApplied - total, 3, MidpointRounding.AwayFromZero);
+                if (change < 0)
+                {
+                    return (StatusCodes.Status400BadRequest, (object)new { error = "INVALID_PAYMENT_TOTAL" });
+                }
+
+                if (change > 0)
+                {
+                    var cashReceived = payments.Where(x => string.Equals(x.Method, "Cash", StringComparison.OrdinalIgnoreCase)).Sum(x => x.Amount);
+                    if (cashReceived < change)
+                    {
+                        return (StatusCodes.Status400BadRequest, (object)new { error = "CHANGE_REQUIRES_CASH" });
+                    }
+                }
+
                 var ledgerEntries = saleItems.Select(x => new StockLedger
                 {
                     Id = Guid.NewGuid(),
@@ -399,7 +487,8 @@ public sealed class PosController(AppDbContext db, IdempotencyService idempotenc
                     .Where(x => string.Equals(x.Method, "Cash", StringComparison.OrdinalIgnoreCase))
                     .Sum(x => x.Amount);
 
-                if (cashAmount != 0)
+                var netCash = cashAmount - change;
+                if (netCash != 0)
                 {
                     db.CashTxns.Add(new CashTxn
                     {
@@ -407,12 +496,92 @@ public sealed class PosController(AppDbContext db, IdempotencyService idempotenc
                         TenantId = tenantId,
                         BranchId = request.BranchId,
                         Type = CashTxnType.SaleIn,
-                        Amount = cashAmount,
+                        Amount = netCash,
                         Note = request.Note,
                         RefType = "Sale",
                         RefId = saleId,
                         At = now
                     });
+                }
+
+                var taxLedgerLines = saleItems
+                    .GroupBy(x =>
+                    {
+                        var rateId = taxRateIdByProductId[x.ProductId];
+                        return (TaxRateId: rateId, TaxPercent: x.TaxPercent);
+                    })
+                    .Select(g => new TaxEngine.Line(g.Key.TaxRateId, g.Key.TaxPercent, decimal.Round(g.Sum(x => x.TaxAmount), 4, MidpointRounding.AwayFromZero)))
+                    .ToList();
+                TaxEngine.AddTaxLedgerEntries(db, tenantId, request.BranchId, now, TaxLedgerType.Output, "Sale", saleId, taxLedgerLines);
+
+                var tenant = await db.Tenants.AsNoTracking().SingleAsync(x => x.Id == tenantId, innerCt);
+                var qrPayload = System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    companyName = tenant.Name,
+                    taxNumber = tenant.TaxRegistrationNo,
+                    at = now,
+                    total,
+                    vat = sale.TaxTotal
+                }, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+                sale.QrCodeBase64 = QrCodeEngine.EncodeSvgBase64(qrPayload);
+
+                var netSales = decimal.Round(total - sale.TaxTotal, 4, MidpointRounding.AwayFromZero);
+                var vatOut = decimal.Round(sale.TaxTotal, 4, MidpointRounding.AwayFromZero);
+
+                var paymentLines = payments
+                    .GroupBy(x => x.Method, StringComparer.OrdinalIgnoreCase)
+                    .Select(g => new { Method = g.Key, Amount = decimal.Round(g.Sum(x => x.Amount), 4, MidpointRounding.AwayFromZero) })
+                    .Where(x => x.Amount != 0)
+                    .ToList();
+
+                static string? MapPaymentMethodToAccountCode(string method) =>
+                    method.Trim().ToLowerInvariant() switch
+                    {
+                        "cash" => AccountingEngine.Codes.Cash,
+                        "visa" => AccountingEngine.Codes.VisaClearing,
+                        "bank" => AccountingEngine.Codes.Bank,
+                        "transfer" => AccountingEngine.Codes.Bank,
+                        "onaccount" => AccountingEngine.Codes.AccountsReceivable,
+                        _ => null
+                    };
+
+                var journalLines = new List<AccountingEngine.Line>();
+                foreach (var pl in paymentLines)
+                {
+                    var code = MapPaymentMethodToAccountCode(pl.Method);
+                    if (code is null)
+                    {
+                        return (StatusCodes.Status400BadRequest, (object)new { error = "UNKNOWN_PAYMENT_METHOD", method = pl.Method });
+                    }
+
+                    journalLines.Add(new AccountingEngine.Line(code, Debit: pl.Amount, Credit: 0m, CustomerId: customerId));
+                }
+
+                if (change > 0)
+                {
+                    journalLines.Add(new AccountingEngine.Line(AccountingEngine.Codes.Cash, Debit: 0m, Credit: decimal.Round(change, 4, MidpointRounding.AwayFromZero), CustomerId: customerId, Note: "Change"));
+                }
+
+                journalLines.Add(new AccountingEngine.Line(AccountingEngine.Codes.SalesRevenue, Debit: 0m, Credit: netSales));
+                if (vatOut != 0)
+                {
+                    journalLines.Add(new AccountingEngine.Line(AccountingEngine.Codes.OutputVat, Debit: 0m, Credit: vatOut));
+                }
+
+                var (journalOk, journalError) = await AccountingEngine.TryAddJournalEntryAsync(
+                    db,
+                    tenantId,
+                    request.BranchId,
+                    now,
+                    "Sale",
+                    saleId,
+                    $"Sale {saleNo}",
+                    journalLines,
+                    innerCt);
+
+                if (!journalOk)
+                {
+                    return (StatusCodes.Status400BadRequest, (object)new { error = journalError });
                 }
 
                 var receipt = new
@@ -432,7 +601,9 @@ public sealed class PosController(AppDbContext db, IdempotencyService idempotenc
                         x.LineTotal
                     }),
                     payments = payments.Select(x => new { x.Method, x.Amount }),
-                    total
+                    total,
+                    taxTotal = sale.TaxTotal,
+                    change
                 };
 
                 db.PrintJobs.Add(new PrintJob
@@ -490,7 +661,8 @@ public sealed class PosController(AppDbContext db, IdempotencyService idempotenc
         var key = rawKey.ToString().Trim();
         var endpoint = "POST:/pos/returns";
         var requestHash = IdempotencyService.HashRequest(request);
-        var ttl = TimeSpan.FromMinutes(3);
+        var ttlMinutes = configuration.GetValue("Idempotency:PosTtlMinutes", 3);
+        var ttl = TimeSpan.FromMinutes(Math.Clamp(ttlMinutes, 1, 30));
 
         return await idempotencyService.ExecuteAsync(
             db,
@@ -708,6 +880,55 @@ public sealed class PosController(AppDbContext db, IdempotencyService idempotenc
                     });
                 }
 
+                var returnTaxTotal = decimal.Round(returnItems.Sum(x => x.TaxAmount), 4, MidpointRounding.AwayFromZero);
+                var returnNet = decimal.Round(total - returnTaxTotal, 4, MidpointRounding.AwayFromZero);
+
+                var returnTaxLedgerLines = returnItems
+                    .GroupBy(x => x.TaxPercent)
+                    .Select(g => new TaxEngine.Line(TaxRateId: null, TaxPercent: g.Key, Amount: -decimal.Round(g.Sum(x => x.TaxAmount), 4, MidpointRounding.AwayFromZero)))
+                    .ToList();
+                TaxEngine.AddTaxLedgerEntries(db, tenantId, request.BranchId, now, TaxLedgerType.Output, "Return", returnId, returnTaxLedgerLines);
+
+                static string? MapRefundMethodToAccountCode(string method) =>
+                    method.Trim().ToLowerInvariant() switch
+                    {
+                        "cash" => AccountingEngine.Codes.Cash,
+                        "visa" => AccountingEngine.Codes.VisaClearing,
+                        "bank" => AccountingEngine.Codes.Bank,
+                        "transfer" => AccountingEngine.Codes.Bank,
+                        "onaccount" => AccountingEngine.Codes.AccountsReceivable,
+                        _ => null
+                    };
+
+                var refundCode = MapRefundMethodToAccountCode(ret.RefundMethod);
+                if (refundCode is null)
+                {
+                    return (StatusCodes.Status400BadRequest, (object)new { error = "UNKNOWN_REFUND_METHOD", method = ret.RefundMethod });
+                }
+
+                var returnJournalLines = new List<AccountingEngine.Line>
+                {
+                    new(AccountingEngine.Codes.SalesReturns, Debit: returnNet, Credit: 0m),
+                    new(AccountingEngine.Codes.OutputVat, Debit: returnTaxTotal, Credit: 0m),
+                    new(refundCode, Debit: 0m, Credit: decimal.Round(total, 4, MidpointRounding.AwayFromZero))
+                };
+
+                var (returnJournalOk, returnJournalError) = await AccountingEngine.TryAddJournalEntryAsync(
+                    db,
+                    tenantId,
+                    request.BranchId,
+                    now,
+                    "Return",
+                    returnId,
+                    $"Return {returnNo}",
+                    returnJournalLines,
+                    innerCt);
+
+                if (!returnJournalOk)
+                {
+                    return (StatusCodes.Status400BadRequest, (object)new { error = returnJournalError });
+                }
+
                 var receipt = new
                 {
                     type = "return",
@@ -724,6 +945,7 @@ public sealed class PosController(AppDbContext db, IdempotencyService idempotenc
                         x.LineTotal
                     }),
                     total,
+                    taxTotal = returnTaxTotal,
                     refundMethod = ret.RefundMethod
                 };
 
@@ -750,6 +972,32 @@ public sealed class PosController(AppDbContext db, IdempotencyService idempotenc
             },
             ttl,
             ct);
+    }
+
+    private static string? BuildPartyAddress(
+        string? country,
+        string? governorate,
+        string? city,
+        string? buildingNo,
+        string? floor,
+        string? apartment,
+        string? streetName,
+        string? postalCode,
+        string? freeForm)
+    {
+        var parts = new List<string>(10);
+
+        if (!string.IsNullOrWhiteSpace(country)) parts.Add(country.Trim());
+        if (!string.IsNullOrWhiteSpace(governorate)) parts.Add(governorate.Trim());
+        if (!string.IsNullOrWhiteSpace(city)) parts.Add(city.Trim());
+        if (!string.IsNullOrWhiteSpace(buildingNo)) parts.Add(buildingNo.Trim());
+        if (!string.IsNullOrWhiteSpace(floor)) parts.Add(floor.Trim());
+        if (!string.IsNullOrWhiteSpace(apartment)) parts.Add(apartment.Trim());
+        if (!string.IsNullOrWhiteSpace(streetName)) parts.Add(streetName.Trim());
+        if (!string.IsNullOrWhiteSpace(postalCode)) parts.Add(postalCode.Trim());
+        if (!string.IsNullOrWhiteSpace(freeForm)) parts.Add(freeForm.Trim());
+
+        return parts.Count == 0 ? null : string.Join(" - ", parts);
     }
 
     private static decimal ComputeIncludedTaxAmount(decimal lineTotal, decimal percent)

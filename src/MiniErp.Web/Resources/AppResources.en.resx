@@ -163,6 +163,158 @@
   <data name="Reports.Summary.StockOut" xml:space="preserve"><value>Out</value></data>
   <data name="Reports.Error.FilterValueRequired" xml:space="preserve"><value>Select a filter value.</value></data>
 
+  <data name="Common.Optional" xml:space="preserve"><value>Optional</value></data>
+  <data name="Common.NoteOptional" xml:space="preserve"><value>Note (optional)</value></data>
+  <data name="Common.Print" xml:space="preserve"><value>Print</value></data>
+  <data name="Common.AddLine" xml:space="preserve"><value>Add line</value></data>
+  <data name="Common.Product" xml:space="preserve"><value>Product</value></data>
+  <data name="Common.Quantity" xml:space="preserve"><value>Quantity</value></data>
+  <data name="Common.Unit" xml:space="preserve"><value>Unit</value></data>
+  <data name="Common.Select" xml:space="preserve"><value>Select...</value></data>
+
+  <data name="Address.Country" xml:space="preserve"><value>Country</value></data>
+  <data name="Address.Governorate" xml:space="preserve"><value>Governorate</value></data>
+  <data name="Address.City" xml:space="preserve"><value>City</value></data>
+  <data name="Address.BuildingNo" xml:space="preserve"><value>Building No.</value></data>
+  <data name="Address.Floor" xml:space="preserve"><value>Floor</value></data>
+  <data name="Address.Apartment" xml:space="preserve"><value>Apartment</value></data>
+  <data name="Address.StreetName" xml:space="preserve"><value>Street</value></data>
+  <data name="Address.PostalCodeOptional" xml:space="preserve"><value>Postal code (optional)</value></data>
+
+  <data name="Payments.Cash" xml:space="preserve"><value>Cash</value></data>
+  <data name="Payments.Visa" xml:space="preserve"><value>Visa</value></data>
+  <data name="Payments.Bank" xml:space="preserve"><value>Bank</value></data>
+  <data name="Payments.OnAccount" xml:space="preserve"><value>On account</value></data>
+
+  <data name="Customers.Address" xml:space="preserve"><value>Address</value></data>
+  <data name="Customers.Country" xml:space="preserve"><value>Country</value></data>
+  <data name="Customers.Governorate" xml:space="preserve"><value>Governorate</value></data>
+  <data name="Customers.City" xml:space="preserve"><value>City</value></data>
+  <data name="Customers.BuildingNo" xml:space="preserve"><value>Building No.</value></data>
+  <data name="Customers.Floor" xml:space="preserve"><value>Floor</value></data>
+  <data name="Customers.Apartment" xml:space="preserve"><value>Apartment</value></data>
+  <data name="Customers.StreetName" xml:space="preserve"><value>Street</value></data>
+  <data name="Customers.PostalCodeOptional" xml:space="preserve"><value>Postal code (optional)</value></data>
+  <data name="Customers.TaxRegistrationNo" xml:space="preserve"><value>Tax registration no.</value></data>
+
+  <data name="Suppliers.Title" xml:space="preserve"><value>Suppliers</value></data>
+  <data name="Suppliers.Search" xml:space="preserve"><value>Search by name or phone...</value></data>
+  <data name="Suppliers.Add" xml:space="preserve"><value>Add supplier</value></data>
+  <data name="Suppliers.Edit" xml:space="preserve"><value>Edit supplier</value></data>
+  <data name="Suppliers.Name" xml:space="preserve"><value>Name</value></data>
+  <data name="Suppliers.Phone" xml:space="preserve"><value>Phone</value></data>
+  <data name="Suppliers.PhoneOptional" xml:space="preserve"><value>Phone (optional)</value></data>
+  <data name="Suppliers.TaxRegistrationNo" xml:space="preserve"><value>Tax registration no.</value></data>
+  <data name="Suppliers.Address" xml:space="preserve"><value>Address</value></data>
+  <data name="Suppliers.Country" xml:space="preserve"><value>Country</value></data>
+  <data name="Suppliers.Governorate" xml:space="preserve"><value>Governorate</value></data>
+  <data name="Suppliers.City" xml:space="preserve"><value>City</value></data>
+  <data name="Suppliers.BuildingNo" xml:space="preserve"><value>Building No.</value></data>
+  <data name="Suppliers.Floor" xml:space="preserve"><value>Floor</value></data>
+  <data name="Suppliers.Apartment" xml:space="preserve"><value>Apartment</value></data>
+  <data name="Suppliers.StreetName" xml:space="preserve"><value>Street</value></data>
+  <data name="Suppliers.PostalCodeOptional" xml:space="preserve"><value>Postal code (optional)</value></data>
+
+  <data name="Sales.MainInfo" xml:space="preserve"><value>Main info</value></data>
+  <data name="Sales.Number" xml:space="preserve"><value>Invoice no.</value></data>
+  <data name="Sales.AutoSequenceHint" xml:space="preserve"><value>Auto-generated</value></data>
+  <data name="Sales.OrderDate" xml:space="preserve"><value>Invoice date</value></data>
+  <data name="Sales.PaymentMethod" xml:space="preserve"><value>Payment method</value></data>
+  <data name="Sales.CustomerOptional" xml:space="preserve"><value>Customer (optional)</value></data>
+  <data name="Sales.CustomerNameOptional" xml:space="preserve"><value>Customer name (optional)</value></data>
+  <data name="Sales.CustomerNote" xml:space="preserve"><value>Note</value></data>
+  <data name="Sales.CustomerTaxRegistrationOrNationalId" xml:space="preserve"><value>Tax registration / National ID</value></data>
+  <data name="Sales.Withholding" xml:space="preserve"><value>Withholding</value></data>
+  <data name="Sales.Address" xml:space="preserve"><value>Address</value></data>
+  <data name="Sales.PriceIncludesVatHint" xml:space="preserve"><value>Prices include VAT</value></data>
+  <data name="Sales.Items" xml:space="preserve"><value>Items</value></data>
+  <data name="Sales.BarcodePlaceholder" xml:space="preserve"><value>Scan or enter barcode...</value></data>
+  <data name="Sales.BarcodeNotFound" xml:space="preserve"><value>Barcode not found.</value></data>
+  <data name="Sales.InvalidLine" xml:space="preserve"><value>Invalid line.</value></data>
+  <data name="Sales.InvalidTotal" xml:space="preserve"><value>Invalid total.</value></data>
+  <data name="Sales.Summary" xml:space="preserve"><value>Summary</value></data>
+  <data name="Sales.TotalBeforeVat" xml:space="preserve"><value>Total before VAT</value></data>
+  <data name="Sales.Vat" xml:space="preserve"><value>VAT</value></data>
+  <data name="Sales.InvoiceDiscount" xml:space="preserve"><value>Discount</value></data>
+  <data name="Sales.CashTendered" xml:space="preserve"><value>Cash tendered</value></data>
+  <data name="Sales.Change" xml:space="preserve"><value>Change</value></data>
+  <data name="Sales.ReferenceOptional" xml:space="preserve"><value>Reference (optional)</value></data>
+  <data name="Sales.SaveAndPay" xml:space="preserve"><value>Save</value></data>
+  <data name="Sales.PrintTitle" xml:space="preserve"><value>Sales receipt</value></data>
+  <data name="Sales.Product" xml:space="preserve"><value>Product</value></data>
+  <data name="Sales.Unit" xml:space="preserve"><value>Unit</value></data>
+  <data name="Sales.Select" xml:space="preserve"><value>Select...</value></data>
+  <data name="Sales.CustomerRequiredForOnAccount" xml:space="preserve"><value>Customer is required for On account.</value></data>
+  <data name="Sales.Col.Product" xml:space="preserve"><value>Product</value></data>
+  <data name="Sales.Col.EgsCode" xml:space="preserve"><value>EGS/GIS code</value></data>
+  <data name="Sales.Col.InternalCode" xml:space="preserve"><value>Internal code</value></data>
+  <data name="Sales.Col.UnitPrice" xml:space="preserve"><value>Unit price</value></data>
+  <data name="Sales.Col.Qty" xml:space="preserve"><value>Qty</value></data>
+  <data name="Sales.Col.Discount" xml:space="preserve"><value>Discount</value></data>
+  <data name="Sales.Col.TotalBeforeVat" xml:space="preserve"><value>Total before VAT</value></data>
+  <data name="Sales.Col.Vat" xml:space="preserve"><value>VAT</value></data>
+  <data name="Sales.Col.TableTax" xml:space="preserve"><value>Table tax</value></data>
+  <data name="Sales.Col.ServiceFee" xml:space="preserve"><value>Service fee</value></data>
+  <data name="Sales.Col.AdditionalTaxes" xml:space="preserve"><value>Additional taxes</value></data>
+  <data name="Sales.Col.AdditionalFees" xml:space="preserve"><value>Additional fees</value></data>
+  <data name="Sales.Col.Total" xml:space="preserve"><value>Total</value></data>
+
+  <data name="Purchases.ListTitle" xml:space="preserve"><value>Purchases</value></data>
+  <data name="Purchases.CreateTitle" xml:space="preserve"><value>New purchase</value></data>
+  <data name="Purchases.ExternalNumber" xml:space="preserve"><value>Supplier invoice no.</value></data>
+  <data name="Purchases.ExternalNumberHint" xml:space="preserve"><value>External invoice number from supplier.</value></data>
+  <data name="Purchases.SupplierOptional" xml:space="preserve"><value>Supplier (optional)</value></data>
+  <data name="Purchases.SupplierNameOptional" xml:space="preserve"><value>Supplier name (optional)</value></data>
+  <data name="Purchases.SupplierTaxNoOptional" xml:space="preserve"><value>Supplier tax no. (optional)</value></data>
+  <data name="Purchases.SupplierTaxNoLabel" xml:space="preserve"><value>Supplier tax no.</value></data>
+  <data name="Purchases.Address" xml:space="preserve"><value>Address</value></data>
+  <data name="Purchases.UnitCost" xml:space="preserve"><value>Unit cost</value></data>
+  <data name="Purchases.CashPaid" xml:space="preserve"><value>Cash paid</value></data>
+  <data name="Purchases.TotalBeforeVat" xml:space="preserve"><value>Total before VAT</value></data>
+  <data name="Purchases.PrintTitle" xml:space="preserve"><value>Purchase receipt</value></data>
+  <data name="Purchases.Saved" xml:space="preserve"><value>Saved</value></data>
+
+  <data name="Products.AddTitle" xml:space="preserve"><value>Add product</value></data>
+  <data name="Products.EditTitle" xml:space="preserve"><value>Edit product</value></data>
+  <data name="Products.SearchPlaceholder" xml:space="preserve"><value>Search by name or code...</value></data>
+  <data name="Products.SelectToEdit" xml:space="preserve"><value>Select a product to edit</value></data>
+  <data name="Products.InternalCode" xml:space="preserve"><value>Internal code</value></data>
+  <data name="Products.PrimaryBarcode" xml:space="preserve"><value>Primary barcode</value></data>
+  <data name="Products.Field.CompanyName" xml:space="preserve"><value>Company name</value></data>
+  <data name="Products.Field.ProductName" xml:space="preserve"><value>Product name</value></data>
+  <data name="Products.Field.DescriptionModel" xml:space="preserve"><value>Description / Model</value></data>
+  <data name="Products.Field.UnitMeasure" xml:space="preserve"><value>Unit measure</value></data>
+  <data name="Products.Field.UnitPrice" xml:space="preserve"><value>Unit price</value></data>
+  <data name="Products.Field.Discount" xml:space="preserve"><value>Discount</value></data>
+  <data name="Products.Field.PriceAfterDiscount" xml:space="preserve"><value>Price after discount</value></data>
+  <data name="Products.Field.ProductGroup" xml:space="preserve"><value>Product group</value></data>
+  <data name="Products.Field.InternalCode" xml:space="preserve"><value>Internal code</value></data>
+  <data name="Products.Field.EgsCode" xml:space="preserve"><value>EGS/GIS code</value></data>
+  <data name="Products.Field.VatRate" xml:space="preserve"><value>VAT rate</value></data>
+  <data name="Products.Error.VatRateRequired" xml:space="preserve"><value>Select VAT rate</value></data>
+  <data name="Products.Field.TaxCodeSales" xml:space="preserve"><value>Sales tax code</value></data>
+  <data name="Products.Field.Cost" xml:space="preserve"><value>Cost</value></data>
+  <data name="Products.Field.ReorderLevel" xml:space="preserve"><value>Reorder level</value></data>
+  <data name="Products.Col.ProductName" xml:space="preserve"><value>Product</value></data>
+  <data name="Products.Col.InternalCode" xml:space="preserve"><value>Internal code</value></data>
+  <data name="Products.Col.EgsCode" xml:space="preserve"><value>EGS/GIS code</value></data>
+  <data name="Products.Col.ProductGroup" xml:space="preserve"><value>Group</value></data>
+  <data name="Products.Col.CompanyName" xml:space="preserve"><value>Company</value></data>
+  <data name="Products.Col.UnitPrice" xml:space="preserve"><value>Unit price</value></data>
+  <data name="Products.Col.Discount" xml:space="preserve"><value>Discount</value></data>
+  <data name="Products.Col.PriceAfterDiscount" xml:space="preserve"><value>Price after discount</value></data>
+  <data name="Products.Col.Vat" xml:space="preserve"><value>VAT</value></data>
+  <data name="Products.Col.TableTax" xml:space="preserve"><value>Table tax</value></data>
+  <data name="Products.Col.ServiceFee" xml:space="preserve"><value>Service fee</value></data>
+  <data name="Products.Col.AdditionalTaxes" xml:space="preserve"><value>Additional taxes</value></data>
+  <data name="Products.Col.AdditionalFees" xml:space="preserve"><value>Additional fees</value></data>
+  <data name="Products.Col.DescriptionModel" xml:space="preserve"><value>Description / Model</value></data>
+
+  <data name="Taxes.Col.MainCode" xml:space="preserve"><value>Main code</value></data>
+  <data name="Taxes.Col.TaxType" xml:space="preserve"><value>Tax type</value></data>
+  <data name="Taxes.Col.SubCode" xml:space="preserve"><value>Sub code</value></data>
+  <data name="Taxes.Col.Description" xml:space="preserve"><value>Description</value></data>
+
   <data name="Error.Unexpected" xml:space="preserve"><value>An unexpected error has occurred.</value></data>
   <data name="Error.Reload" xml:space="preserve"><value>Reload</value></data>
 </root>

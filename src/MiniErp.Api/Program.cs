@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using MiniErp.Api.Infrastructure.Observability;
 using MiniErp.Api.Infrastructure.Maintenance;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -43,7 +43,17 @@ builder.Services.Configure<ApiBehaviorOptions>(options =>
 });
 
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.CustomSchemaIds(type =>
+    {
+        var id = type.FullName ?? type.Name;
+        id = id.Replace('+', '.');
+        id = id.Replace((char)96, '_');
+        id = id.Replace('[', '_').Replace(']', '_').Replace(',', '_').Replace(' ', '_');
+        return id;
+    });
+});
 
 builder.Services.AddScoped<MiniErp.Api.Infrastructure.Tenancy.ITenantProvider, MiniErp.Api.Infrastructure.Tenancy.HttpHeaderTenantProvider>();
 builder.Services.AddDbContext<MiniErp.Api.Data.AppDbContext>((sp, options) =>

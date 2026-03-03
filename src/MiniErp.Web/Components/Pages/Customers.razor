@@ -48,6 +48,7 @@
                                 <thead>
                                     <tr>
                                         <th>@L["Customers.Name"]</th>
+                                        <th>@L["Customers.TaxRegistrationNo"]</th>
                                         <th>@L["Customers.Phone"]</th>
                                         <th>@L["Common.Active"]</th>
                                         <th></th>
@@ -58,6 +59,7 @@
                                     {
                                         <tr>
                                             <td>@c.Name</td>
+                                            <td class="text-muted">@((string.IsNullOrWhiteSpace(c.TaxRegistrationNo) ? "-" : c.TaxRegistrationNo))</td>
                                             <td class="text-muted">@((string.IsNullOrWhiteSpace(c.Phone) ? "-" : c.Phone))</td>
                                             <td>@(c.IsActive ? L["Common.Yes"] : L["Common.No"])</td>
                                             <td class="text-end">
@@ -84,9 +86,14 @@
                                 <ValidationMessage For="@(() => _create.Name)" />
                             </div>
                             <div class="mb-2">
+                                <label class="form-label">@L["Customers.TaxRegistrationNo"]</label>
+                                <InputText class="form-control" @bind-Value="_create.TaxRegistrationNo" />
+                            </div>
+                            <div class="mb-2">
                                 <label class="form-label">@L["Customers.PhoneOptional"]</label>
                                 <InputText class="form-control" @bind-Value="_create.Phone" />
                             </div>
+
                             <div class="form-check mb-3">
                                 <InputCheckbox class="form-check-input" @bind-Value="_create.IsActive" />
                                 <label class="form-check-label">@L["Common.Active"]</label>
@@ -112,9 +119,14 @@
                                     <ValidationMessage For="@(() => _edit.Name)" />
                                 </div>
                                 <div class="mb-2">
+                                    <label class="form-label">@L["Customers.TaxRegistrationNo"]</label>
+                                    <InputText class="form-control" @bind-Value="_edit.TaxRegistrationNo" />
+                                </div>
+                                <div class="mb-2">
                                     <label class="form-label">@L["Customers.PhoneOptional"]</label>
                                     <InputText class="form-control" @bind-Value="_edit.Phone" />
                                 </div>
+
                                 <div class="form-check mb-3">
                                     <InputCheckbox class="form-check-input" @bind-Value="_edit.IsActive" />
                                     <label class="form-check-label">@L["Common.Active"]</label>
@@ -195,6 +207,15 @@
             {
                 name = _create.Name.Trim(),
                 phone = string.IsNullOrWhiteSpace(_create.Phone) ? null : _create.Phone.Trim(),
+                taxRegistrationNo = string.IsNullOrWhiteSpace(_create.TaxRegistrationNo) ? null : _create.TaxRegistrationNo.Trim(),
+                country = (string?)null,
+                governorate = (string?)null,
+                city = (string?)null,
+                buildingNo = (string?)null,
+                floor = (string?)null,
+                apartment = (string?)null,
+                streetName = (string?)null,
+                postalCode = (string?)null,
                 isActive = _create.IsActive
             });
 
@@ -232,7 +253,16 @@
         {
             Id = item.Id,
             Name = item.Name,
-            Phone = item.Phone,
+            Phone = item.Phone ?? "",
+            TaxRegistrationNo = item.TaxRegistrationNo ?? "",
+            Country = item.Country ?? "",
+            Governorate = item.Governorate ?? "",
+            City = item.City ?? "",
+            BuildingNo = item.BuildingNo ?? "",
+            Floor = item.Floor ?? "",
+            Apartment = item.Apartment ?? "",
+            StreetName = item.StreetName ?? "",
+            PostalCode = item.PostalCode ?? "",
             IsActive = item.IsActive
         };
     }
@@ -255,6 +285,15 @@
             {
                 name = _edit.Name.Trim(),
                 phone = string.IsNullOrWhiteSpace(_edit.Phone) ? null : _edit.Phone.Trim(),
+                taxRegistrationNo = string.IsNullOrWhiteSpace(_edit.TaxRegistrationNo) ? null : _edit.TaxRegistrationNo.Trim(),
+                country = NullIfEmpty(_edit.Country),
+                governorate = NullIfEmpty(_edit.Governorate),
+                city = NullIfEmpty(_edit.City),
+                buildingNo = NullIfEmpty(_edit.BuildingNo),
+                floor = NullIfEmpty(_edit.Floor),
+                apartment = NullIfEmpty(_edit.Apartment),
+                streetName = NullIfEmpty(_edit.StreetName),
+                postalCode = NullIfEmpty(_edit.PostalCode),
                 isActive = _edit.IsActive
             });
 
@@ -298,6 +337,15 @@
         public Guid Id { get; set; }
         public string Name { get; set; } = "";
         public string? Phone { get; set; }
+        public string? TaxRegistrationNo { get; set; }
+        public string? Country { get; set; }
+        public string? Governorate { get; set; }
+        public string? City { get; set; }
+        public string? BuildingNo { get; set; }
+        public string? Floor { get; set; }
+        public string? Apartment { get; set; }
+        public string? StreetName { get; set; }
+        public string? PostalCode { get; set; }
         public bool IsActive { get; set; }
     }
 
@@ -308,7 +356,34 @@
         public string Name { get; set; } = "";
 
         [MaxLength(50)]
-        public string? Phone { get; set; }
+        public string Phone { get; set; } = "";
+
+        [MaxLength(50)]
+        public string TaxRegistrationNo { get; set; } = "";
+
+        [MaxLength(100)]
+        public string Country { get; set; } = "";
+
+        [MaxLength(100)]
+        public string Governorate { get; set; } = "";
+
+        [MaxLength(100)]
+        public string City { get; set; } = "";
+
+        [MaxLength(50)]
+        public string BuildingNo { get; set; } = "";
+
+        [MaxLength(50)]
+        public string Floor { get; set; } = "";
+
+        [MaxLength(50)]
+        public string Apartment { get; set; } = "";
+
+        [MaxLength(200)]
+        public string StreetName { get; set; } = "";
+
+        [MaxLength(20)]
+        public string PostalCode { get; set; } = "";
 
         public bool IsActive { get; set; } = true;
     }
@@ -317,4 +392,6 @@
     {
         public Guid Id { get; set; }
     }
+
+    private static string? NullIfEmpty(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
