@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MiniErp.Api.Contracts.Parties;
@@ -13,32 +13,81 @@ namespace MiniErp.Api.Controllers;
 [Authorize]
 public sealed class SuppliersController(AppDbContext db) : ControllerBase
 {
+    // ── Lookups (mirrors CustomersController) ────────────────────────────────
+
+    [HttpGet("lookup/countries")]
+    public async Task<ActionResult<IReadOnlyList<CountryOption>>> GetCountries(CancellationToken ct)
+    {
+        var countries = await db.Countries
+            .AsNoTracking()
+            .Where(x => x.IsActive)
+            .OrderBy(x => x.NameAr)
+            .Select(x => new CountryOption(x.Id, x.Name, x.NameAr))
+            .ToListAsync(ct);
+
+        return Ok(countries);
+    }
+
+    [HttpGet("lookup/governorates/{countryId:guid}")]
+    public async Task<ActionResult<IReadOnlyList<GovernorateOption>>> GetGovernoratesByCountry(
+        [FromRoute] Guid countryId, CancellationToken ct)
+    {
+        var governorates = await db.Governorates
+            .AsNoTracking()
+            .Where(x => x.CountryId == countryId && x.IsActive)
+            .OrderBy(x => x.NameAr)
+            .Select(x => new GovernorateOption(x.Id, x.CountryId, x.Name, x.NameAr))
+            .ToListAsync(ct);
+
+        return Ok(governorates);
+    }
+
+    // ── CRUD ─────────────────────────────────────────────────────────────────
+
     [HttpGet]
     [RequirePermission(PermissionKeys.SuppliersView)]
-    public async Task<ActionResult<IReadOnlyList<SupplierListItem>>> List([FromQuery] string? search, CancellationToken ct)
+    public async Task<ActionResult<IReadOnlyList<SupplierListItem>>> List(
+        [FromQuery] string? search, CancellationToken ct)
     {
         var tenantId = db.TenantId;
         if (tenantId == Guid.Empty)
-        {
             return BadRequest(new { error = "TENANT_REQUIRED" });
-        }
 
         IQueryable<Supplier> query = db.Suppliers.AsNoTracking();
         if (!string.IsNullOrWhiteSpace(search))
-        {
             query = query.Where(x => x.Name.Contains(search) || (x.Phone != null && x.Phone.Contains(search)));
-        }
 
-        var items = await query
+        // fetch suppliers (limit)
+        var suppliers = await query
             .OrderBy(x => x.Name)
             .Take(500)
+            .ToListAsync(ct);
+
+        // collect referenced country/governorate ids so we can return names
+        var countryIds = suppliers.Where(x => x.CountryId.HasValue).Select(x => x.CountryId!.Value).Distinct().ToArray();
+        var govIds = suppliers.Where(x => x.GovernorateId.HasValue).Select(x => x.GovernorateId!.Value).Distinct().ToArray();
+
+        var countries = countryIds.Length == 0
+            ? new List<Country>()
+            : await db.Countries.AsNoTracking().Where(x => countryIds.Contains(x.Id)).ToListAsync(ct);
+
+        var governorates = govIds.Length == 0
+            ? new List<Governorate>()
+            : await db.Governorates.AsNoTracking().Where(x => govIds.Contains(x.Id)).ToListAsync(ct);
+
+        var countriesById = countries.ToDictionary(x => x.Id, x => x);
+        var govsById = governorates.ToDictionary(x => x.Id, x => x);
+
+        var items = suppliers
             .Select(x => new SupplierListItem(
                 x.Id,
                 x.Name,
                 x.Phone,
                 x.TaxRegistrationNo,
-                x.Country,
-                x.Governorate,
+                x.CountryId,
+                x.CountryId.HasValue && countriesById.TryGetValue(x.CountryId.Value, out var c) ? c.NameAr : x.Country,
+                x.GovernorateId,
+                x.GovernorateId.HasValue && govsById.TryGetValue(x.GovernorateId.Value, out var g) ? g.NameAr : x.Governorate,
                 x.City,
                 x.BuildingNo,
                 x.Floor,
@@ -47,7 +96,8 @@ public sealed class SuppliersController(AppDbContext db) : ControllerBase
                 x.PostalCode,
                 x.Address,
                 x.IsActive))
-            .ToListAsync(ct);
+            .ToList()
+            .AsReadOnly();
 
         return Ok(items);
     }
@@ -58,24 +108,36 @@ public sealed class SuppliersController(AppDbContext db) : ControllerBase
     {
         var tenantId = db.TenantId;
         if (tenantId == Guid.Empty)
-        {
             return BadRequest(new { error = "TENANT_REQUIRED" });
-        }
 
         if (string.IsNullOrWhiteSpace(request.Name))
-        {
             return BadRequest(new { error = "NAME_REQUIRED" });
-        }
 
         var taxNo = string.IsNullOrWhiteSpace(request.TaxRegistrationNo) ? null : request.TaxRegistrationNo.Trim();
         if (!string.IsNullOrWhiteSpace(taxNo))
         {
             var dup = await db.Suppliers.AnyAsync(x => x.TaxRegistrationNo == taxNo, ct);
             if (dup)
-            {
                 return Conflict(new { error = "DUPLICATE_TAX_NUMBER" });
-            }
         }
+
+        // resolve country name from ID, fall back to free-text
+        string? countryName = null;
+        if (request.CountryId.HasValue)
+        {
+            var c = await db.Countries.AsNoTracking().SingleOrDefaultAsync(x => x.Id == request.CountryId.Value, ct);
+            countryName = c is null ? null : (string.IsNullOrWhiteSpace(c.NameAr) ? c.Name : c.NameAr);
+        }
+
+        // resolve governorate name from ID, fall back to free-text
+        string? governorateName = null;
+        if (request.GovernorateId.HasValue)
+        {
+            var g = await db.Governorates.AsNoTracking().SingleOrDefaultAsync(x => x.Id == request.GovernorateId.Value, ct);
+            governorateName = g is null ? null : (string.IsNullOrWhiteSpace(g.NameAr) ? g.Name : g.NameAr);
+        }
+        if (string.IsNullOrWhiteSpace(governorateName) && !string.IsNullOrWhiteSpace(request.GovernorateText))
+            governorateName = request.GovernorateText.Trim();
 
         var entity = new Supplier
         {
@@ -84,8 +146,10 @@ public sealed class SuppliersController(AppDbContext db) : ControllerBase
             Name = request.Name.Trim(),
             Phone = string.IsNullOrWhiteSpace(request.Phone) ? null : request.Phone.Trim(),
             TaxRegistrationNo = taxNo,
-            Country = string.IsNullOrWhiteSpace(request.Country) ? null : request.Country.Trim(),
-            Governorate = string.IsNullOrWhiteSpace(request.Governorate) ? null : request.Governorate.Trim(),
+            CountryId = request.CountryId,
+            GovernorateId = request.GovernorateId,
+            Country = countryName,
+            Governorate = governorateName,
             City = string.IsNullOrWhiteSpace(request.City) ? null : request.City.Trim(),
             BuildingNo = string.IsNullOrWhiteSpace(request.BuildingNo) ? null : request.BuildingNo.Trim(),
             Floor = string.IsNullOrWhiteSpace(request.Floor) ? null : request.Floor.Trim(),
@@ -104,7 +168,9 @@ public sealed class SuppliersController(AppDbContext db) : ControllerBase
             entity.Name,
             entity.Phone,
             entity.TaxRegistrationNo,
+            entity.CountryId,
             entity.Country,
+            entity.GovernorateId,
             entity.Governorate,
             entity.City,
             entity.BuildingNo,
@@ -118,39 +184,52 @@ public sealed class SuppliersController(AppDbContext db) : ControllerBase
 
     [HttpPut("{id:guid}")]
     [RequirePermission(PermissionKeys.SuppliersEdit)]
-    public async Task<IActionResult> Update([FromRoute] Guid id, [FromBody] UpdateSupplierRequest request, CancellationToken ct)
+    public async Task<IActionResult> Update(
+        [FromRoute] Guid id, [FromBody] UpdateSupplierRequest request, CancellationToken ct)
     {
         if (id == Guid.Empty)
-        {
             return BadRequest(new { error = "INVALID_ID" });
-        }
 
         if (string.IsNullOrWhiteSpace(request.Name))
-        {
             return BadRequest(new { error = "NAME_REQUIRED" });
-        }
 
         var entity = await db.Suppliers.SingleOrDefaultAsync(x => x.Id == id, ct);
         if (entity is null)
-        {
             return NotFound(new { error = "NOT_FOUND" });
-        }
 
         var taxNo = string.IsNullOrWhiteSpace(request.TaxRegistrationNo) ? null : request.TaxRegistrationNo.Trim();
         if (!string.IsNullOrWhiteSpace(taxNo))
         {
             var dup = await db.Suppliers.AnyAsync(x => x.Id != id && x.TaxRegistrationNo == taxNo, ct);
             if (dup)
-            {
                 return Conflict(new { error = "DUPLICATE_TAX_NUMBER" });
-            }
         }
+
+        // resolve country name from ID
+        string? countryName = null;
+        if (request.CountryId.HasValue)
+        {
+            var c = await db.Countries.AsNoTracking().SingleOrDefaultAsync(x => x.Id == request.CountryId.Value, ct);
+            countryName = c is null ? null : (string.IsNullOrWhiteSpace(c.NameAr) ? c.Name : c.NameAr);
+        }
+
+        // resolve governorate name from ID, fall back to free-text
+        string? governorateName = null;
+        if (request.GovernorateId.HasValue)
+        {
+            var g = await db.Governorates.AsNoTracking().SingleOrDefaultAsync(x => x.Id == request.GovernorateId.Value, ct);
+            governorateName = g is null ? null : (string.IsNullOrWhiteSpace(g.NameAr) ? g.Name : g.NameAr);
+        }
+        if (string.IsNullOrWhiteSpace(governorateName) && !string.IsNullOrWhiteSpace(request.GovernorateText))
+            governorateName = request.GovernorateText.Trim();
 
         entity.Name = request.Name.Trim();
         entity.Phone = string.IsNullOrWhiteSpace(request.Phone) ? null : request.Phone.Trim();
         entity.TaxRegistrationNo = taxNo;
-        entity.Country = string.IsNullOrWhiteSpace(request.Country) ? null : request.Country.Trim();
-        entity.Governorate = string.IsNullOrWhiteSpace(request.Governorate) ? null : request.Governorate.Trim();
+        entity.CountryId = request.CountryId;
+        entity.GovernorateId = request.GovernorateId;
+        entity.Country = countryName;
+        entity.Governorate = governorateName;
         entity.City = string.IsNullOrWhiteSpace(request.City) ? null : request.City.Trim();
         entity.BuildingNo = string.IsNullOrWhiteSpace(request.BuildingNo) ? null : request.BuildingNo.Trim();
         entity.Floor = string.IsNullOrWhiteSpace(request.Floor) ? null : request.Floor.Trim();

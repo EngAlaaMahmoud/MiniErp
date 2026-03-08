@@ -4,6 +4,7 @@
 @inject ApiClient Api
 @inject NavigationManager Nav
 @using System.ComponentModel.DataAnnotations
+@using System.Globalization
 
 <PageTitle>@L["Customers.Title"]</PageTitle>
 
@@ -77,118 +78,116 @@
             </div>
 
             <div class="col-lg-5">
-                <div class="card mb-3">
+                <div class="card">
                     <div class="card-body">
-                        <div class="fw-bold mb-2">@L["Customers.Add"]</div>
-                        <EditForm Model="_create" OnValidSubmit="Create">
-                            <DataAnnotationsValidator />
-                            <div class="mb-2">
-                                <label class="form-label">@L["Customers.Name"]</label>
-                                <InputText class="form-control" @bind-Value="_create.Name" />
-                                <ValidationMessage For="@(() => _create.Name)" />
-                            </div>
-                            <div class="mb-2">
-                                <label class="form-label">@L["Customers.TaxRegistrationNo"]</label>
-                                <InputText class="form-control" @bind-Value="_create.TaxRegistrationNo" />
-                            </div>
-                            <div class="mb-2">
-                                <label class="form-label">@L["Customers.PhoneOptional"]</label>
-                                <InputText class="form-control" @bind-Value="_create.Phone" />
-                            </div>
-
-                            <div class="mb-2">
-                                <label class="form-label">@L["Customers.Type"]</label>
-                                <InputSelect class="form-select" @bind-Value="_create.CustomerTypeId">
-                                    <option value="">-</option>
-                                    @foreach (var type in _customerTypes)
-                                    {
-                                        <option value="@type.Id">@type.NameAr</option>
-                                    }
-                                </InputSelect>
-                            </div>
-
-                            <div class="mb-2">
-                                <label class="form-label">@L["Customers.Country"]</label>
-                                <InputSelect class="form-select" @bind-Value="_create.CountryId" @bind-Value:after="OnCreateCountryChanged">
-                                    <option value="">-</option>
-                                    @foreach (var country in _countries)
-                                    {
-                                        <option value="@country.Id">@country.NameAr</option>
-                                    }
-                                </InputSelect>
-                            </div>
-
-                            @if (_create.CountryId.HasValue && IsEgypt(_create.CountryId.Value))
-                            {
+                        @if (_edit is null)
+                        {
+                            <div class="fw-bold mb-2">@L["Customers.Add"]</div>
+                            <EditForm Model="_create" OnValidSubmit="Create">
+                                <DataAnnotationsValidator />
                                 <div class="mb-2">
-                                    <label class="form-label">@L["Customers.Governorate"]</label>
-                                    <InputSelect class="form-select" @bind-Value="_create.GovernorateId">
+                                    <label class="form-label">@L["Customers.Name"]</label>
+                                    <InputText class="form-control" @bind-Value="_create.Name" />
+                                    <ValidationMessage For="@(() => _create.Name)" />
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label">@L["Customers.TaxRegistrationNo"]</label>
+                                    <InputText class="form-control" @bind-Value="_create.TaxRegistrationNo" />
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label">@L["Customers.PhoneOptional"]</label>
+                                    <InputText class="form-control" @bind-Value="_create.Phone" />
+                                </div>
+
+                                <div class="mb-2">
+                                    <label class="form-label">@L["Customers.Type"]</label>
+                                    <InputSelect class="form-select" @bind-Value="_create.CustomerTypeId">
                                         <option value="">-</option>
-                                        @foreach (var gov in _createGovernorates)
+                                        @foreach (var type in _customerTypes)
                                         {
-                                            <option value="@gov.Id">@gov.NameAr</option>
+                                            <option value="@type.Id">@LocalName(type.Name, type.NameAr)</option>
                                         }
                                     </InputSelect>
                                 </div>
-                            }
-                            else if (_create.CountryId.HasValue)
-                            {
+
                                 <div class="mb-2">
-                                    <label class="form-label">@L["Customers.Governorate"]</label>
-                                    <InputText class="form-control" @bind-Value="_create.GovernorateText" placeholder="@L["Customers.Governorate"]" />
+                                    <label class="form-label">@L["Customers.Country"]</label>
+                                    <InputSelect class="form-select" @bind-Value="_create.CountryId" @bind-Value:after="OnCreateCountryChanged">
+                                        <option value="">-</option>
+                                        @foreach (var country in _countries)
+                                        {
+                                            <option value="@country.Id">@LocalName(country.Name, country.NameAr)</option>
+                                        }
+                                    </InputSelect>
                                 </div>
-                            }
 
-                            <div class="mb-2">
-                                <label class="form-label">@L["Customers.City"]</label>
-                                <InputText class="form-control" @bind-Value="_create.City" />
-                            </div>
+                                @if (_create.CountryId.HasValue && IsEgypt(_create.CountryId.Value))
+                                {
+                                    <div class="mb-2">
+                                        <label class="form-label">@L["Customers.Governorate"]</label>
+                                        <InputSelect class="form-select" @bind-Value="_create.GovernorateId">
+                                            <option value="">-</option>
+                                            @foreach (var gov in _createGovernorates)
+                                            {
+                                                <option value="@gov.Id">@LocalName(gov.Name, gov.NameAr)</option>
+                                            }
+                                        </InputSelect>
+                                    </div>
+                                }
+                                else if (_create.CountryId.HasValue)
+                                {
+                                    <div class="mb-2">
+                                        <label class="form-label">@L["Customers.Governorate"]</label>
+                                        <InputText class="form-control" @bind-Value="_create.GovernorateText" placeholder="@L["Customers.Governorate"]" />
+                                    </div>
+                                }
 
-                            <div class="mb-2">
-                                <label class="form-label">@L["Customers.StreetName"]</label>
-                                <InputText class="form-control" @bind-Value="_create.StreetName" />
-                            </div>
-
-                            <div class="row g-2">
-                                <div class="col">
-                                    <label class="form-label">@L["Customers.BuildingNo"]</label>
-                                    <InputText class="form-control" @bind-Value="_create.BuildingNo" />
+                                <div class="mb-2">
+                                    <label class="form-label">@L["Customers.City"]</label>
+                                    <InputText class="form-control" @bind-Value="_create.City" />
                                 </div>
-                                <div class="col">
-                                    <label class="form-label">@L["Customers.Floor"]</label>
-                                    <InputText class="form-control" @bind-Value="_create.Floor" />
+
+                                <div class="mb-2">
+                                    <label class="form-label">@L["Customers.StreetName"]</label>
+                                    <InputText class="form-control" @bind-Value="_create.StreetName" />
                                 </div>
-                            </div>
 
-                            <div class="row g-2 mt-2">
-                                <div class="col">
-                                    <label class="form-label">@L["Customers.Apartment"]</label>
-                                    <InputText class="form-control" @bind-Value="_create.Apartment" />
+                                <div class="row g-2">
+                                    <div class="col">
+                                        <label class="form-label">@L["Customers.BuildingNo"]</label>
+                                        <InputText class="form-control" @bind-Value="_create.BuildingNo" />
+                                    </div>
+                                    <div class="col">
+                                        <label class="form-label">@L["Customers.Floor"]</label>
+                                        <InputText class="form-control" @bind-Value="_create.Floor" />
+                                    </div>
                                 </div>
-                                <div class="col">
-                                    <label class="form-label">@L["Customers.PostalCode"]</label>
-                                    <InputText class="form-control" @bind-Value="_create.PostalCode" />
+
+                                <div class="row g-2 mt-2">
+                                    <div class="col">
+                                        <label class="form-label">@L["Customers.Apartment"]</label>
+                                        <InputText class="form-control" @bind-Value="_create.Apartment" />
+                                    </div>
+                                    <div class="col">
+                                        <label class="form-label">@L["Customers.PostalCode"]</label>
+                                        <InputText class="form-control" @bind-Value="_create.PostalCode" />
+                                    </div>
                                 </div>
-                            </div>
 
-                            <div class="mb-2 mt-2">
-                                <label class="form-label">@L["Customers.Address"]</label>
-                                <InputText class="form-control" @bind-Value="_create.Address" />
-                            </div>
+                                <div class="mb-2 mt-2">
+                                    <label class="form-label">@L["Customers.Address"]</label>
+                                    <InputText class="form-control" @bind-Value="_create.Address" />
+                                </div>
 
-                            <div class="form-check mb-3">
-                                <InputCheckbox class="form-check-input" @bind-Value="_create.IsActive" />
-                                <label class="form-check-label">@L["Common.Active"]</label>
-                            </div>
-                            <button class="btn btn-primary w-100" type="submit" disabled="@_busy">@L["Common.Save"]</button>
-                        </EditForm>
-                    </div>
-                </div>
-
-                @if (_edit is not null)
-                {
-                    <div class="card">
-                        <div class="card-body">
+                                <div class="form-check mb-3">
+                                    <InputCheckbox class="form-check-input" @bind-Value="_create.IsActive" />
+                                    <label class="form-check-label">@L["Common.Active"]</label>
+                                </div>
+                                <button class="btn btn-primary w-100" type="submit" disabled="@_busy">@L["Common.Save"]</button>
+                            </EditForm>
+                        }
+                        else
+                        {
                             <div class="d-flex justify-content-between align-items-center mb-2">
                                 <div class="fw-bold">@L["Customers.Edit"]</div>
                                 <button class="btn btn-sm btn-outline-secondary" @onclick="ClearEdit" disabled="@_busy">@L["Common.Cancel"]</button>
@@ -215,7 +214,7 @@
                                         <option value="">-</option>
                                         @foreach (var type in _customerTypes)
                                         {
-                                            <option value="@type.Id">@type.NameAr</option>
+                                            <option value="@type.Id">@LocalName(type.Name, type.NameAr)</option>
                                         }
                                     </InputSelect>
                                 </div>
@@ -226,7 +225,7 @@
                                         <option value="">-</option>
                                         @foreach (var country in _countries)
                                         {
-                                            <option value="@country.Id">@country.NameAr</option>
+                                            <option value="@country.Id">@LocalName(country.Name, country.NameAr)</option>
                                         }
                                     </InputSelect>
                                 </div>
@@ -239,7 +238,7 @@
                                             <option value="">-</option>
                                             @foreach (var gov in _editGovernorates)
                                             {
-                                                <option value="@gov.Id">@gov.NameAr</option>
+                                                <option value="@gov.Id">@LocalName(gov.Name, gov.NameAr)</option>
                                             }
                                         </InputSelect>
                                     </div>
@@ -295,15 +294,27 @@
                                 </div>
                                 <button class="btn btn-success w-100" type="submit" disabled="@_busy">@L["Common.Save"]</button>
                             </EditForm>
-                        </div>
+                        }
                     </div>
-                }
+                </div>
             </div>
         </div>
     }
 </div>
 
 @code {
+    // ── Language helpers ─────────────────────────────────────────────────────
+    private static bool IsArabicCulture =>
+        CultureInfo.CurrentUICulture.TwoLetterISOLanguageName.Equals("ar", StringComparison.OrdinalIgnoreCase);
+
+    /// Returns the Arabic name when the UI is in Arabic, otherwise the English name.
+    /// Falls back gracefully if either value is missing.
+    private static string LocalName(string? name, string? nameAr) =>
+        IsArabicCulture
+            ? (string.IsNullOrWhiteSpace(nameAr) ? name ?? "" : nameAr)
+            : (string.IsNullOrWhiteSpace(name) ? nameAr ?? "" : name);
+
+    // ── State ────────────────────────────────────────────────────────────────
     private bool _ready;
     private bool _busy;
     private string? _error;

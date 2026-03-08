@@ -7,8 +7,10 @@ public sealed record SupplierListItem(
     string Name,
     string? Phone,
     string? TaxRegistrationNo,
-    string? Country,
-    string? Governorate,
+    Guid? CountryId,
+    string? CountryName,
+    Guid? GovernorateId,
+    string? GovernorateName,
     string? City,
     string? BuildingNo,
     string? Floor,
@@ -25,8 +27,12 @@ public sealed class CreateSupplierRequest
 
     public string? Phone { get; set; }
     public string? TaxRegistrationNo { get; set; }
-    public string? Country { get; set; }
-    public string? Governorate { get; set; }
+    public Guid? CountryId { get; set; }
+    public Guid? GovernorateId { get; set; }
+
+    // allow sending free-text governorate for non-Egypt countries
+    public string? GovernorateText { get; set; }
+
     public string? City { get; set; }
     public string? BuildingNo { get; set; }
     public string? Floor { get; set; }
@@ -44,8 +50,12 @@ public sealed class UpdateSupplierRequest
 
     public string? Phone { get; set; }
     public string? TaxRegistrationNo { get; set; }
-    public string? Country { get; set; }
-    public string? Governorate { get; set; }
+    public Guid? CountryId { get; set; }
+    public Guid? GovernorateId { get; set; }
+
+    // allow free-text governorate for non-Egypt countries
+    public string? GovernorateText { get; set; }
+
     public string? City { get; set; }
     public string? BuildingNo { get; set; }
     public string? Floor { get; set; }

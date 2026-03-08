@@ -9,8 +9,14 @@ public sealed class Supplier : ITenantScoped
     public string? Phone { get; set; }
     public string? TaxRegistrationNo { get; set; }
 
+    // store selected lookup ids so UI can pre-select dropdowns
+    public Guid? CountryId { get; set; }
+    public Guid? GovernorateId { get; set; }
+
+    // resolved / stored display values (kept for address building and display)
     public string? Country { get; set; }
     public string? Governorate { get; set; }
+
     public string? City { get; set; }
     public string? BuildingNo { get; set; }
     public string? Floor { get; set; }

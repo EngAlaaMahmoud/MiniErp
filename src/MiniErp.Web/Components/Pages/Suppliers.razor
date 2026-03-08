@@ -4,6 +4,7 @@
 @inject ApiClient Api
 @inject NavigationManager Nav
 @using System.ComponentModel.DataAnnotations
+@using System.Globalization
 
 <PageTitle>@L["Suppliers.Title"]</PageTitle>
 
@@ -61,7 +62,7 @@
                                             <td>@s.Name</td>
                                             <td class="text-muted">@((string.IsNullOrWhiteSpace(s.TaxRegistrationNo) ? "-" : s.TaxRegistrationNo))</td>
                                             <td class="text-muted">@((string.IsNullOrWhiteSpace(s.Phone) ? "-" : s.Phone))</td>
-                                            <td>@(s.IsActive ? L["Common.Yes"] : L["Common.No"])</td>
+                                            <td>@(s.IsActive? L["Common.Yes"] : L["Common.No"])</td>
                                             <td class="text-end">
                                                 <button class="btn btn-sm btn-outline-secondary" @onclick="() => SelectForEdit(s)">@L["Common.Edit"]</button>
                                             </td>
@@ -75,76 +76,105 @@
             </div>
 
             <div class="col-lg-5">
-                <div class="card mb-3">
+                <div class="card">
                     <div class="card-body">
-                        <div class="fw-bold mb-2">@L["Suppliers.Add"]</div>
-                        <EditForm Model="_create" OnValidSubmit="Create">
-                            <DataAnnotationsValidator />
-                            <div class="mb-2">
-                                <label class="form-label">@L["Suppliers.Name"]</label>
-                                <InputText class="form-control" @bind-Value="_create.Name" />
-                                <ValidationMessage For="@(() => _create.Name)" />
-                            </div>
-                            <div class="mb-2">
-                                <label class="form-label">@L["Suppliers.TaxRegistrationNo"]</label>
-                                <InputText class="form-control" @bind-Value="_create.TaxRegistrationNo" />
-                            </div>
-                            <div class="mb-2">
-                                <label class="form-label">@L["Suppliers.PhoneOptional"]</label>
-                                <InputText class="form-control" @bind-Value="_create.Phone" />
-                            </div>
+                        @if (_edit is null)
+                        {
+                            <div class="fw-bold mb-2">@L["Suppliers.Add"]</div>
+                            <EditForm Model="_create" OnValidSubmit="Create">
+                                <DataAnnotationsValidator />
+                                <div class="mb-2">
+                                    <label class="form-label">@L["Suppliers.Name"]</label>
+                                    <InputText class="form-control" @bind-Value="_create.Name" />
+                                    <ValidationMessage For="@(() => _create.Name)" />
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label">@L["Suppliers.TaxRegistrationNo"]</label>
+                                    <InputText class="form-control" @bind-Value="_create.TaxRegistrationNo" />
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label">@L["Suppliers.PhoneOptional"]</label>
+                                    <InputText class="form-control" @bind-Value="_create.Phone" />
+                                </div>
 
-                            <div class="mb-2">
-                                <label class="form-label">@L["Suppliers.Address"]</label>
+                                <div class="mb-2">
+                                    <label class="form-label">@L["Suppliers.Country"]</label>
+                                    <InputSelect class="form-select" @bind-Value="_create.CountryId" @bind-Value:after="OnCreateCountryChanged">
+                                        <option value="">-</option>
+                                        @foreach (var country in _countries)
+                                        {
+                                            <option value="@country.Id">@LocalName(country.Name, country.NameAr)</option>
+                                        }
+                                    </InputSelect>
+                                </div>
+
+                                @if (_create.CountryId.HasValue && IsEgypt(_create.CountryId.Value))
+                                {
+                                    <div class="mb-2">
+                                        <label class="form-label">@L["Suppliers.Governorate"]</label>
+                                        <InputSelect class="form-select" @bind-Value="_create.GovernorateId">
+                                            <option value="">-</option>
+                                            @foreach (var gov in _createGovernorates)
+                                            {
+                                                <option value="@gov.Id">@LocalName(gov.Name, gov.NameAr)</option>
+                                            }
+                                        </InputSelect>
+                                    </div>
+                                }
+                                else if (_create.CountryId.HasValue)
+                                {
+                                    <div class="mb-2">
+                                        <label class="form-label">@L["Suppliers.Governorate"]</label>
+                                        <InputText class="form-control" @bind-Value="_create.GovernorateText" placeholder="@L["Suppliers.Governorate"]" />
+                                    </div>
+                                }
+
+                                <div class="mb-2">
+                                    <label class="form-label">@L["Suppliers.City"]</label>
+                                    <InputText class="form-control" @bind-Value="_create.City" />
+                                </div>
+
+                                <div class="mb-2">
+                                    <label class="form-label">@L["Suppliers.StreetName"]</label>
+                                    <InputText class="form-control" @bind-Value="_create.StreetName" />
+                                </div>
+
                                 <div class="row g-2">
-                                    <div class="col-12 col-md-4">
-                                        <label class="form-label small text-muted">@L["Suppliers.Country"]</label>
-                                        <InputText class="form-control" @bind-Value="_create.Country" />
-                                    </div>
-                                    <div class="col-12 col-md-4">
-                                        <label class="form-label small text-muted">@L["Suppliers.Governorate"]</label>
-                                        <InputText class="form-control" @bind-Value="_create.Governorate" />
-                                    </div>
-                                    <div class="col-12 col-md-4">
-                                        <label class="form-label small text-muted">@L["Suppliers.City"]</label>
-                                        <InputText class="form-control" @bind-Value="_create.City" />
-                                    </div>
-                                    <div class="col-12 col-md-4">
-                                        <label class="form-label small text-muted">@L["Suppliers.BuildingNo"]</label>
+                                    <div class="col">
+                                        <label class="form-label">@L["Suppliers.BuildingNo"]</label>
                                         <InputText class="form-control" @bind-Value="_create.BuildingNo" />
                                     </div>
-                                    <div class="col-12 col-md-4">
-                                        <label class="form-label small text-muted">@L["Suppliers.Floor"]</label>
+                                    <div class="col">
+                                        <label class="form-label">@L["Suppliers.Floor"]</label>
                                         <InputText class="form-control" @bind-Value="_create.Floor" />
                                     </div>
-                                    <div class="col-12 col-md-4">
-                                        <label class="form-label small text-muted">@L["Suppliers.Apartment"]</label>
+                                </div>
+
+                                <div class="row g-2 mt-2">
+                                    <div class="col">
+                                        <label class="form-label">@L["Suppliers.Apartment"]</label>
                                         <InputText class="form-control" @bind-Value="_create.Apartment" />
                                     </div>
-                                    <div class="col-12 col-md-8">
-                                        <label class="form-label small text-muted">@L["Suppliers.StreetName"]</label>
-                                        <InputText class="form-control" @bind-Value="_create.StreetName" />
-                                    </div>
-                                    <div class="col-12 col-md-4">
-                                        <label class="form-label small text-muted">@L["Suppliers.PostalCodeOptional"]</label>
+                                    <div class="col">
+                                        <label class="form-label">@L["Suppliers.PostalCodeOptional"]</label>
                                         <InputText class="form-control" @bind-Value="_create.PostalCode" />
                                     </div>
                                 </div>
-                            </div>
 
-                            <div class="form-check mb-3">
-                                <InputCheckbox class="form-check-input" @bind-Value="_create.IsActive" />
-                                <label class="form-check-label">@L["Common.Active"]</label>
-                            </div>
-                            <button class="btn btn-primary w-100" type="submit" disabled="@_busy">@L["Common.Save"]</button>
-                        </EditForm>
-                    </div>
-                </div>
+                                <div class="mb-2 mt-2">
+                                    <label class="form-label">@L["Suppliers.Address"]</label>
+                                    <InputText class="form-control" @bind-Value="_create.Address" />
+                                </div>
 
-                @if (_edit is not null)
-                {
-                    <div class="card">
-                        <div class="card-body">
+                                <div class="form-check mb-3">
+                                    <InputCheckbox class="form-check-input" @bind-Value="_create.IsActive" />
+                                    <label class="form-check-label">@L["Common.Active"]</label>
+                                </div>
+                                <button class="btn btn-primary w-100" type="submit" disabled="@_busy">@L["Common.Save"]</button>
+                            </EditForm>
+                        }
+                        else
+                        {
                             <div class="d-flex justify-content-between align-items-center mb-2">
                                 <div class="fw-bold">@L["Suppliers.Edit"]</div>
                                 <button class="btn btn-sm btn-outline-secondary" @onclick="ClearEdit" disabled="@_busy">@L["Common.Cancel"]</button>
@@ -166,41 +196,72 @@
                                 </div>
 
                                 <div class="mb-2">
-                                    <label class="form-label">@L["Suppliers.Address"]</label>
-                                    <div class="row g-2">
-                                        <div class="col-12 col-md-4">
-                                            <label class="form-label small text-muted">@L["Suppliers.Country"]</label>
-                                            <InputText class="form-control" @bind-Value="_edit.Country" />
-                                        </div>
-                                        <div class="col-12 col-md-4">
-                                            <label class="form-label small text-muted">@L["Suppliers.Governorate"]</label>
-                                            <InputText class="form-control" @bind-Value="_edit.Governorate" />
-                                        </div>
-                                        <div class="col-12 col-md-4">
-                                            <label class="form-label small text-muted">@L["Suppliers.City"]</label>
-                                            <InputText class="form-control" @bind-Value="_edit.City" />
-                                        </div>
-                                        <div class="col-12 col-md-4">
-                                            <label class="form-label small text-muted">@L["Suppliers.BuildingNo"]</label>
-                                            <InputText class="form-control" @bind-Value="_edit.BuildingNo" />
-                                        </div>
-                                        <div class="col-12 col-md-4">
-                                            <label class="form-label small text-muted">@L["Suppliers.Floor"]</label>
-                                            <InputText class="form-control" @bind-Value="_edit.Floor" />
-                                        </div>
-                                        <div class="col-12 col-md-4">
-                                            <label class="form-label small text-muted">@L["Suppliers.Apartment"]</label>
-                                            <InputText class="form-control" @bind-Value="_edit.Apartment" />
-                                        </div>
-                                        <div class="col-12 col-md-8">
-                                            <label class="form-label small text-muted">@L["Suppliers.StreetName"]</label>
-                                            <InputText class="form-control" @bind-Value="_edit.StreetName" />
-                                        </div>
-                                        <div class="col-12 col-md-4">
-                                            <label class="form-label small text-muted">@L["Suppliers.PostalCodeOptional"]</label>
-                                            <InputText class="form-control" @bind-Value="_edit.PostalCode" />
-                                        </div>
+                                    <label class="form-label">@L["Suppliers.Country"]</label>
+                                    <InputSelect class="form-select" @bind-Value="_edit.CountryId" @bind-Value:after="OnEditCountryChanged">
+                                        <option value="">-</option>
+                                        @foreach (var country in _countries)
+                                        {
+                                            <option value="@country.Id">@LocalName(country.Name, country.NameAr)</option>
+                                        }
+                                    </InputSelect>
+                                </div>
+
+                                @if (_edit.CountryId.HasValue && IsEgypt(_edit.CountryId.Value))
+                                {
+                                    <div class="mb-2">
+                                        <label class="form-label">@L["Suppliers.Governorate"]</label>
+                                        <InputSelect class="form-select" @bind-Value="_edit.GovernorateId">
+                                            <option value="">-</option>
+                                            @foreach (var gov in _editGovernorates)
+                                            {
+                                                <option value="@gov.Id">@LocalName(gov.Name, gov.NameAr)</option>
+                                            }
+                                        </InputSelect>
                                     </div>
+                                }
+                                else if (_edit.CountryId.HasValue)
+                                {
+                                    <div class="mb-2">
+                                        <label class="form-label">@L["Suppliers.Governorate"]</label>
+                                        <InputText class="form-control" @bind-Value="_edit.GovernorateText" placeholder="@L["Suppliers.Governorate"]" />
+                                    </div>
+                                }
+
+                                <div class="mb-2">
+                                    <label class="form-label">@L["Suppliers.City"]</label>
+                                    <InputText class="form-control" @bind-Value="_edit.City" />
+                                </div>
+
+                                <div class="mb-2">
+                                    <label class="form-label">@L["Suppliers.StreetName"]</label>
+                                    <InputText class="form-control" @bind-Value="_edit.StreetName" />
+                                </div>
+
+                                <div class="row g-2">
+                                    <div class="col">
+                                        <label class="form-label">@L["Suppliers.BuildingNo"]</label>
+                                        <InputText class="form-control" @bind-Value="_edit.BuildingNo" />
+                                    </div>
+                                    <div class="col">
+                                        <label class="form-label">@L["Suppliers.Floor"]</label>
+                                        <InputText class="form-control" @bind-Value="_edit.Floor" />
+                                    </div>
+                                </div>
+
+                                <div class="row g-2 mt-2">
+                                    <div class="col">
+                                        <label class="form-label">@L["Suppliers.Apartment"]</label>
+                                        <InputText class="form-control" @bind-Value="_edit.Apartment" />
+                                    </div>
+                                    <div class="col">
+                                        <label class="form-label">@L["Suppliers.PostalCodeOptional"]</label>
+                                        <InputText class="form-control" @bind-Value="_edit.PostalCode" />
+                                    </div>
+                                </div>
+
+                                <div class="mb-2 mt-2">
+                                    <label class="form-label">@L["Suppliers.Address"]</label>
+                                    <InputText class="form-control" @bind-Value="_edit.Address" />
                                 </div>
 
                                 <div class="form-check mb-3">
@@ -209,15 +270,27 @@
                                 </div>
                                 <button class="btn btn-success w-100" type="submit" disabled="@_busy">@L["Common.Save"]</button>
                             </EditForm>
-                        </div>
+                        }
                     </div>
-                }
+                </div>
             </div>
         </div>
     }
 </div>
 
 @code {
+    // ── Language helpers ─────────────────────────────────────────────────────
+    private static bool IsArabicCulture =>
+        CultureInfo.CurrentUICulture.TwoLetterISOLanguageName.Equals("ar", StringComparison.OrdinalIgnoreCase);
+
+    /// Returns the Arabic name when the UI is in Arabic, otherwise the English name.
+    /// Falls back gracefully if either value is missing.
+    private static string LocalName(string? name, string? nameAr) =>
+        IsArabicCulture
+            ? (string.IsNullOrWhiteSpace(nameAr) ? name ?? "" : nameAr)
+            : (string.IsNullOrWhiteSpace(name) ? nameAr ?? "" : name);
+
+    // ── State ────────────────────────────────────────────────────────────────
     private bool _ready;
     private bool _busy;
     private string? _error;
@@ -225,23 +298,50 @@
     private string _search = "";
 
     private List<SupplierListItem> _suppliers = [];
+    private List<CountryOption> _countries = new();
+    private List<GovernorateOption> _createGovernorates = new();
+    private List<GovernorateOption> _editGovernorates = new();
+
     private CreateSupplierModel _create = new();
     private UpdateSupplierModel? _edit;
 
+    private Guid _egyptCountryId = Guid.Empty;
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!firstRender)
-        {
-            return;
-        }
+        if (!firstRender) return;
 
         await Session.EnsureLoadedAsync();
         _ready = true;
         if (Session.IsLoggedIn)
         {
+            await LoadLookups();
             await Load();
         }
         StateHasChanged();
+    }
+
+    private async Task LoadLookups()
+    {
+        _error = null;
+        _busy = true;
+        try
+        {
+            _countries = await Api.GetAsync<List<CountryOption>>("suppliers/lookup/countries");
+
+            var egypt = _countries.FirstOrDefault(x =>
+                x.Name.Equals("Egypt", StringComparison.OrdinalIgnoreCase) || x.NameAr.Contains("مصر"));
+            if (egypt != null)
+                _egyptCountryId = egypt.Id;
+        }
+        catch (ApiHttpException ex)
+        {
+            _error = string.IsNullOrWhiteSpace(ex.Body) ? ex.Message : ex.Body;
+        }
+        finally
+        {
+            _busy = false;
+        }
     }
 
     private async Task Load()
@@ -256,10 +356,7 @@
         }
         catch (ApiUnauthorizedException ex)
         {
-            if (ex.WasAuthenticated)
-            {
-                await Session.ClearAsync();
-            }
+            if (ex.WasAuthenticated) await Session.ClearAsync();
             RedirectToLogin();
         }
         catch (ApiHttpException ex)
@@ -279,19 +376,25 @@
         _busy = true;
         try
         {
+            var governorateId = _create.CountryId.HasValue && IsEgypt(_create.CountryId.Value)
+                ? _create.GovernorateId
+                : null;
+
             var response = await Api.PostAsync("suppliers", new
             {
                 name = _create.Name.Trim(),
                 phone = NullIfEmpty(_create.Phone),
                 taxRegistrationNo = NullIfEmpty(_create.TaxRegistrationNo),
-                country = NullIfEmpty(_create.Country),
-                governorate = NullIfEmpty(_create.Governorate),
+                countryId = _create.CountryId,
+                governorateId = governorateId,
+                governorateText = NullIfEmpty(_create.GovernorateText),
                 city = NullIfEmpty(_create.City),
                 buildingNo = NullIfEmpty(_create.BuildingNo),
                 floor = NullIfEmpty(_create.Floor),
                 apartment = NullIfEmpty(_create.Apartment),
                 streetName = NullIfEmpty(_create.StreetName),
                 postalCode = NullIfEmpty(_create.PostalCode),
+                address = NullIfEmpty(_create.Address),
                 isActive = _create.IsActive
             });
 
@@ -302,15 +405,13 @@
             }
 
             _create = new CreateSupplierModel();
+            _createGovernorates = new();
             _success = L["Common.Added"].Value;
             await Load();
         }
         catch (ApiUnauthorizedException ex)
         {
-            if (ex.WasAuthenticated)
-            {
-                await Session.ClearAsync();
-            }
+            if (ex.WasAuthenticated) await Session.ClearAsync();
             RedirectToLogin();
         }
         catch (ApiHttpException ex)
@@ -331,45 +432,55 @@
             Name = item.Name,
             Phone = item.Phone ?? "",
             TaxRegistrationNo = item.TaxRegistrationNo ?? "",
-            Country = item.Country ?? "",
-            Governorate = item.Governorate ?? "",
+            CountryId = item.CountryId,
+            GovernorateId = item.GovernorateId,
+            GovernorateText = item.GovernorateName ?? "",
             City = item.City ?? "",
+            StreetName = item.StreetName ?? "",
             BuildingNo = item.BuildingNo ?? "",
             Floor = item.Floor ?? "",
             Apartment = item.Apartment ?? "",
-            StreetName = item.StreetName ?? "",
             PostalCode = item.PostalCode ?? "",
+            Address = item.Address ?? "",
             IsActive = item.IsActive
         };
+        _ = OnEditCountryChanged();
     }
 
-    private void ClearEdit() => _edit = null;
+    private void ClearEdit()
+    {
+        _edit = null;
+        _editGovernorates = new();
+    }
 
     private async Task Update()
     {
-        if (_edit is null)
-        {
-            return;
-        }
+        if (_edit is null) return;
 
         _error = null;
         _success = null;
         _busy = true;
         try
         {
+            var governorateId = _edit.CountryId.HasValue && IsEgypt(_edit.CountryId.Value)
+                ? _edit.GovernorateId
+                : null;
+
             var response = await Api.PutAsync($"suppliers/{_edit.Id}", new
             {
                 name = _edit.Name.Trim(),
                 phone = NullIfEmpty(_edit.Phone),
                 taxRegistrationNo = NullIfEmpty(_edit.TaxRegistrationNo),
-                country = NullIfEmpty(_edit.Country),
-                governorate = NullIfEmpty(_edit.Governorate),
+                countryId = _edit.CountryId,
+                governorateId = governorateId,
+                governorateText = NullIfEmpty(_edit.GovernorateText),
                 city = NullIfEmpty(_edit.City),
                 buildingNo = NullIfEmpty(_edit.BuildingNo),
                 floor = NullIfEmpty(_edit.Floor),
                 apartment = NullIfEmpty(_edit.Apartment),
                 streetName = NullIfEmpty(_edit.StreetName),
                 postalCode = NullIfEmpty(_edit.PostalCode),
+                address = NullIfEmpty(_edit.Address),
                 isActive = _edit.IsActive
             });
 
@@ -381,14 +492,12 @@
 
             _success = L["Common.Updated"].Value;
             _edit = null;
+            _editGovernorates = new();
             await Load();
         }
         catch (ApiUnauthorizedException ex)
         {
-            if (ex.WasAuthenticated)
-            {
-                await Session.ClearAsync();
-            }
+            if (ex.WasAuthenticated) await Session.ClearAsync();
             RedirectToLogin();
         }
         catch (ApiHttpException ex)
@@ -401,6 +510,34 @@
         }
     }
 
+    private async Task OnCreateCountryChanged()
+    {
+        _createGovernorates = new();
+        _create.GovernorateId = null;
+        _create.GovernorateText = "";
+        if (!_create.CountryId.HasValue) return;
+
+        if (IsEgypt(_create.CountryId.Value))
+        {
+            try { _createGovernorates = await Api.GetAsync<List<GovernorateOption>>($"suppliers/lookup/governorates/{_create.CountryId}"); }
+            catch { }
+        }
+    }
+
+    private async Task OnEditCountryChanged()
+    {
+        _editGovernorates = new();
+        if (_edit is null || !_edit.CountryId.HasValue) return;
+
+        if (IsEgypt(_edit.CountryId.Value))
+        {
+            try { _editGovernorates = await Api.GetAsync<List<GovernorateOption>>($"suppliers/lookup/governorates/{_edit.CountryId}"); }
+            catch { }
+        }
+    }
+
+    private bool IsEgypt(Guid countryId) => _egyptCountryId != Guid.Empty && countryId == _egyptCountryId;
+
     private void RedirectToLogin()
     {
         var relative = Nav.ToBaseRelativePath(Nav.Uri);
@@ -410,20 +547,25 @@
 
     private static string? NullIfEmpty(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
+    // ── Inline DTOs ──────────────────────────────────────────────────────────
+
     private sealed class SupplierListItem
     {
         public Guid Id { get; set; }
         public string Name { get; set; } = "";
         public string? Phone { get; set; }
         public string? TaxRegistrationNo { get; set; }
-        public string? Country { get; set; }
-        public string? Governorate { get; set; }
+        public Guid? CountryId { get; set; }
+        public string? CountryName { get; set; }
+        public Guid? GovernorateId { get; set; }
+        public string? GovernorateName { get; set; }
         public string? City { get; set; }
         public string? BuildingNo { get; set; }
         public string? Floor { get; set; }
         public string? Apartment { get; set; }
         public string? StreetName { get; set; }
         public string? PostalCode { get; set; }
+        public string? Address { get; set; }
         public bool IsActive { get; set; }
     }
 
@@ -439,11 +581,9 @@
         [MaxLength(50)]
         public string TaxRegistrationNo { get; set; } = "";
 
-        [MaxLength(100)]
-        public string Country { get; set; } = "مصر";
-
-        [MaxLength(100)]
-        public string Governorate { get; set; } = "";
+        public Guid? CountryId { get; set; }
+        public Guid? GovernorateId { get; set; }
+        public string? GovernorateText { get; set; }
 
         [MaxLength(100)]
         public string City { get; set; } = "";
@@ -463,6 +603,9 @@
         [MaxLength(20)]
         public string PostalCode { get; set; } = "";
 
+        [MaxLength(500)]
+        public string Address { get; set; } = "";
+
         public bool IsActive { get; set; } = true;
     }
 
@@ -470,5 +613,19 @@
     {
         public Guid Id { get; set; }
     }
-}
 
+    private sealed class CountryOption
+    {
+        public Guid Id { get; set; }
+        public string Name { get; set; } = "";
+        public string NameAr { get; set; } = "";
+    }
+
+    private sealed class GovernorateOption
+    {
+        public Guid Id { get; set; }
+        public Guid CountryId { get; set; }
+        public string Name { get; set; } = "";
+        public string NameAr { get; set; } = "";
+    }
+}
