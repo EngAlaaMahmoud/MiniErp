@@ -1,4 +1,4 @@
-@page "/customers"
+﻿@page "/customers"
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 @inject ApiSession Session
 @inject ApiClient Api
@@ -50,6 +50,7 @@
                                         <th>@L["Customers.Name"]</th>
                                         <th>@L["Customers.TaxRegistrationNo"]</th>
                                         <th>@L["Customers.Phone"]</th>
+                                        <th>@L["Customers.Type"]</th>
                                         <th>@L["Common.Active"]</th>
                                         <th></th>
                                     </tr>
@@ -61,7 +62,8 @@
                                             <td>@c.Name</td>
                                             <td class="text-muted">@((string.IsNullOrWhiteSpace(c.TaxRegistrationNo) ? "-" : c.TaxRegistrationNo))</td>
                                             <td class="text-muted">@((string.IsNullOrWhiteSpace(c.Phone) ? "-" : c.Phone))</td>
-                                            <td>@(c.IsActive ? L["Common.Yes"] : L["Common.No"])</td>
+                                            <td class="text-muted">@((c.CustomerTypeName ?? "-"))</td>
+                                            <td>@(c.IsActive? L["Common.Yes"] : L["Common.No"])</td>
                                             <td class="text-end">
                                                 <button class="btn btn-sm btn-outline-secondary" @onclick="() => SelectForEdit(c)">@L["Common.Edit"]</button>
                                             </td>
@@ -92,6 +94,86 @@
                             <div class="mb-2">
                                 <label class="form-label">@L["Customers.PhoneOptional"]</label>
                                 <InputText class="form-control" @bind-Value="_create.Phone" />
+                            </div>
+
+                            <div class="mb-2">
+                                <label class="form-label">@L["Customers.Type"]</label>
+                                <InputSelect class="form-select" @bind-Value="_create.CustomerTypeId">
+                                    <option value="">-</option>
+                                    @foreach (var type in _customerTypes)
+                                    {
+                                        <option value="@type.Id">@type.NameAr</option>
+                                    }
+                                </InputSelect>
+                            </div>
+
+                            <div class="mb-2">
+                                <label class="form-label">@L["Customers.Country"]</label>
+                                <InputSelect class="form-select" @bind-Value="_create.CountryId" @bind-Value:after="OnCreateCountryChanged">
+                                    <option value="">-</option>
+                                    @foreach (var country in _countries)
+                                    {
+                                        <option value="@country.Id">@country.NameAr</option>
+                                    }
+                                </InputSelect>
+                            </div>
+
+                            @if (_create.CountryId.HasValue && IsEgypt(_create.CountryId.Value))
+                            {
+                                <div class="mb-2">
+                                    <label class="form-label">@L["Customers.Governorate"]</label>
+                                    <InputSelect class="form-select" @bind-Value="_create.GovernorateId">
+                                        <option value="">-</option>
+                                        @foreach (var gov in _createGovernorates)
+                                        {
+                                            <option value="@gov.Id">@gov.NameAr</option>
+                                        }
+                                    </InputSelect>
+                                </div>
+                            }
+                            else if (_create.CountryId.HasValue)
+                            {
+                                <div class="mb-2">
+                                    <label class="form-label">@L["Customers.Governorate"]</label>
+                                    <InputText class="form-control" @bind-Value="_create.GovernorateText" placeholder="@L["Customers.Governorate"]" />
+                                </div>
+                            }
+
+                            <div class="mb-2">
+                                <label class="form-label">@L["Customers.City"]</label>
+                                <InputText class="form-control" @bind-Value="_create.City" />
+                            </div>
+
+                            <div class="mb-2">
+                                <label class="form-label">@L["Customers.StreetName"]</label>
+                                <InputText class="form-control" @bind-Value="_create.StreetName" />
+                            </div>
+
+                            <div class="row g-2">
+                                <div class="col">
+                                    <label class="form-label">@L["Customers.BuildingNo"]</label>
+                                    <InputText class="form-control" @bind-Value="_create.BuildingNo" />
+                                </div>
+                                <div class="col">
+                                    <label class="form-label">@L["Customers.Floor"]</label>
+                                    <InputText class="form-control" @bind-Value="_create.Floor" />
+                                </div>
+                            </div>
+
+                            <div class="row g-2 mt-2">
+                                <div class="col">
+                                    <label class="form-label">@L["Customers.Apartment"]</label>
+                                    <InputText class="form-control" @bind-Value="_create.Apartment" />
+                                </div>
+                                <div class="col">
+                                    <label class="form-label">@L["Customers.PostalCode"]</label>
+                                    <InputText class="form-control" @bind-Value="_create.PostalCode" />
+                                </div>
+                            </div>
+
+                            <div class="mb-2 mt-2">
+                                <label class="form-label">@L["Customers.Address"]</label>
+                                <InputText class="form-control" @bind-Value="_create.Address" />
                             </div>
 
                             <div class="form-check mb-3">
@@ -127,6 +209,86 @@
                                     <InputText class="form-control" @bind-Value="_edit.Phone" />
                                 </div>
 
+                                <div class="mb-2">
+                                    <label class="form-label">@L["Customers.Type"]</label>
+                                    <InputSelect class="form-select" @bind-Value="_edit.CustomerTypeId">
+                                        <option value="">-</option>
+                                        @foreach (var type in _customerTypes)
+                                        {
+                                            <option value="@type.Id">@type.NameAr</option>
+                                        }
+                                    </InputSelect>
+                                </div>
+
+                                <div class="mb-2">
+                                    <label class="form-label">@L["Customers.Country"]</label>
+                                    <InputSelect class="form-select" @bind-Value="_edit.CountryId" @bind-Value:after="OnEditCountryChanged">
+                                        <option value="">-</option>
+                                        @foreach (var country in _countries)
+                                        {
+                                            <option value="@country.Id">@country.NameAr</option>
+                                        }
+                                    </InputSelect>
+                                </div>
+
+                                @if (_edit.CountryId.HasValue && IsEgypt(_edit.CountryId.Value))
+                                {
+                                    <div class="mb-2">
+                                        <label class="form-label">@L["Customers.Governorate"]</label>
+                                        <InputSelect class="form-select" @bind-Value="_edit.GovernorateId">
+                                            <option value="">-</option>
+                                            @foreach (var gov in _editGovernorates)
+                                            {
+                                                <option value="@gov.Id">@gov.NameAr</option>
+                                            }
+                                        </InputSelect>
+                                    </div>
+                                }
+                                else if (_edit.CountryId.HasValue)
+                                {
+                                    <div class="mb-2">
+                                        <label class="form-label">@L["Customers.Governorate"]</label>
+                                        <InputText class="form-control" @bind-Value="_edit.GovernorateText" placeholder="@L["Customers.Governorate"]" />
+                                    </div>
+                                }
+
+                                <div class="mb-2">
+                                    <label class="form-label">@L["Customers.City"]</label>
+                                    <InputText class="form-control" @bind-Value="_edit.City" />
+                                </div>
+
+                                <div class="mb-2">
+                                    <label class="form-label">@L["Customers.StreetName"]</label>
+                                    <InputText class="form-control" @bind-Value="_edit.StreetName" />
+                                </div>
+
+                                <div class="row g-2">
+                                    <div class="col">
+                                        <label class="form-label">@L["Customers.BuildingNo"]</label>
+                                        <InputText class="form-control" @bind-Value="_edit.BuildingNo" />
+                                    </div>
+                                    <div class="col">
+                                        <label class="form-label">@L["Customers.Floor"]</label>
+                                        <InputText class="form-control" @bind-Value="_edit.Floor" />
+                                    </div>
+                                </div>
+
+                                <div class="row g-2 mt-2">
+                                    <div class="col">
+                                        <label class="form-label">@L["Customers.Apartment"]</label>
+                                        <InputText class="form-control" @bind-Value="_edit.Apartment" />
+                                    </div>
+                                    <div class="col">
+                                        <label class="form-label">@L["Customers.PostalCode"]</label>
+                                        <InputText class="form-control" @bind-Value="_edit.PostalCode" />
+                                    </div>
+                                </div>
+
+                                <div class="mb-2 mt-2">
+                                    <label class="form-label">@L["Customers.Address"]</label>
+                                    <InputText class="form-control" @bind-Value="_edit.Address" />
+                                </div>
+
                                 <div class="form-check mb-3">
                                     <InputCheckbox class="form-check-input" @bind-Value="_edit.IsActive" />
                                     <label class="form-check-label">@L["Common.Active"]</label>
@@ -148,9 +310,16 @@
     private string? _success;
     private string _search = "";
 
-    private List<CustomerListItem> _customers = [];
+    private List<CustomerListItem> _customers = new();
+    private List<CountryOption> _countries = new();
+    private List<CustomerTypeOption> _customerTypes = new();
+    private List<GovernorateOption> _createGovernorates = new();
+    private List<GovernorateOption> _editGovernorates = new();
+
     private CreateCustomerModel _create = new();
     private UpdateCustomerModel? _edit;
+
+    private Guid _egyptCountryId = Guid.Empty;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -163,9 +332,36 @@
         _ready = true;
         if (Session.IsLoggedIn)
         {
+            await LoadLookups();
             await Load();
         }
         StateHasChanged();
+    }
+
+    private async Task LoadLookups()
+    {
+        _error = null;
+        _busy = true;
+        try
+        {
+            _countries = await Api.GetAsync<List<CountryOption>>("customers/lookup/countries");
+            _customerTypes = await Api.GetAsync<List<CustomerTypeOption>>("customers/lookup/customer-types");
+
+            // Find Egypt ID
+            var egypt = _countries.FirstOrDefault(x => x.Name.Equals("Egypt", StringComparison.OrdinalIgnoreCase) || x.NameAr.Contains("مصر"));
+            if (egypt != null)
+            {
+                _egyptCountryId = egypt.Id;
+            }
+        }
+        catch (ApiHttpException ex)
+        {
+            _error = string.IsNullOrWhiteSpace(ex.Body) ? ex.Message : ex.Body;
+        }
+        finally
+        {
+            _busy = false;
+        }
     }
 
     private async Task Load()
@@ -203,19 +399,26 @@
         _busy = true;
         try
         {
+            var governorateId = _create.CountryId.HasValue && IsEgypt(_create.CountryId.Value)
+                ? _create.GovernorateId
+                : null;
+
             var response = await Api.PostAsync("customers", new
             {
                 name = _create.Name.Trim(),
                 phone = string.IsNullOrWhiteSpace(_create.Phone) ? null : _create.Phone.Trim(),
                 taxRegistrationNo = string.IsNullOrWhiteSpace(_create.TaxRegistrationNo) ? null : _create.TaxRegistrationNo.Trim(),
-                country = (string?)null,
-                governorate = (string?)null,
-                city = (string?)null,
-                buildingNo = (string?)null,
-                floor = (string?)null,
-                apartment = (string?)null,
-                streetName = (string?)null,
-                postalCode = (string?)null,
+                customerTypeId = _create.CustomerTypeId,
+                countryId = _create.CountryId,
+                governorateId = governorateId,
+                governorateText = !_create.CountryId.HasValue ? NullIfEmpty(_create.GovernorateText) : NullIfEmpty(_create.GovernorateText),
+                city = string.IsNullOrWhiteSpace(_create.City) ? null : _create.City.Trim(),
+                buildingNo = NullIfEmpty(_create.BuildingNo),
+                floor = NullIfEmpty(_create.Floor),
+                apartment = NullIfEmpty(_create.Apartment),
+                streetName = NullIfEmpty(_create.StreetName),
+                postalCode = NullIfEmpty(_create.PostalCode),
+                address = string.IsNullOrWhiteSpace(_create.Address) ? null : _create.Address.Trim(),
                 isActive = _create.IsActive
             });
 
@@ -226,6 +429,7 @@
             }
 
             _create = new CreateCustomerModel();
+            _createGovernorates = new();
             _success = L["Common.Added"].Value;
             await Load();
         }
@@ -255,16 +459,22 @@
             Name = item.Name,
             Phone = item.Phone ?? "",
             TaxRegistrationNo = item.TaxRegistrationNo ?? "",
-            Country = item.Country ?? "",
-            Governorate = item.Governorate ?? "",
+            CustomerTypeId = item.CustomerTypeId,
+            CountryId = item.CountryId,
+            GovernorateId = item.GovernorateId,
+            GovernorateText = item.GovernorateName ?? "",
             City = item.City ?? "",
+            StreetName = item.StreetName ?? "",
             BuildingNo = item.BuildingNo ?? "",
             Floor = item.Floor ?? "",
             Apartment = item.Apartment ?? "",
-            StreetName = item.StreetName ?? "",
             PostalCode = item.PostalCode ?? "",
+            Address = item.Address ?? "",
             IsActive = item.IsActive
         };
+
+        // load governorates for the selected country if needed
+        _ = OnEditCountryChanged();
     }
 
     private void ClearEdit() => _edit = null;
@@ -281,19 +491,26 @@
         _busy = true;
         try
         {
+            var governorateId = _edit.CountryId.HasValue && IsEgypt(_edit.CountryId.Value)
+                ? _edit.GovernorateId
+                : null;
+
             var response = await Api.PutAsync($"customers/{_edit.Id}", new
             {
                 name = _edit.Name.Trim(),
                 phone = string.IsNullOrWhiteSpace(_edit.Phone) ? null : _edit.Phone.Trim(),
                 taxRegistrationNo = string.IsNullOrWhiteSpace(_edit.TaxRegistrationNo) ? null : _edit.TaxRegistrationNo.Trim(),
-                country = NullIfEmpty(_edit.Country),
-                governorate = NullIfEmpty(_edit.Governorate),
+                customerTypeId = _edit.CustomerTypeId,
+                countryId = _edit.CountryId,
+                governorateId = governorateId,
+                governorateText = NullIfEmpty(_edit.GovernorateText),
                 city = NullIfEmpty(_edit.City),
                 buildingNo = NullIfEmpty(_edit.BuildingNo),
                 floor = NullIfEmpty(_edit.Floor),
                 apartment = NullIfEmpty(_edit.Apartment),
                 streetName = NullIfEmpty(_edit.StreetName),
                 postalCode = NullIfEmpty(_edit.PostalCode),
+                address = NullIfEmpty(_edit.Address),
                 isActive = _edit.IsActive
             });
 
@@ -305,6 +522,7 @@
 
             _success = L["Common.Updated"].Value;
             _edit = null;
+            _editGovernorates = new();
             await Load();
         }
         catch (ApiUnauthorizedException ex)
@@ -325,6 +543,40 @@
         }
     }
 
+    private async Task OnCreateCountryChanged()
+    {
+        _createGovernorates = new();
+        if (!_create.CountryId.HasValue)
+            return;
+
+        if (IsEgypt(_create.CountryId.Value))
+        {
+            try
+            {
+                _createGovernorates = await Api.GetAsync<List<GovernorateOption>>($"customers/lookup/governorates/{_create.CountryId}");
+            }
+            catch { }
+        }
+    }
+
+    private async Task OnEditCountryChanged()
+    {
+        _editGovernorates = new();
+        if (_edit is null || !_edit.CountryId.HasValue)
+            return;
+
+        if (IsEgypt(_edit.CountryId.Value))
+        {
+            try
+            {
+                _editGovernorates = await Api.GetAsync<List<GovernorateOption>>($"customers/lookup/governorates/{_edit.CountryId}");
+            }
+            catch { }
+        }
+    }
+
+    private bool IsEgypt(Guid countryId) => _egyptCountryId != Guid.Empty && countryId == _egyptCountryId;
+
     private void RedirectToLogin()
     {
         var relative = Nav.ToBaseRelativePath(Nav.Uri);
@@ -338,14 +590,19 @@
         public string Name { get; set; } = "";
         public string? Phone { get; set; }
         public string? TaxRegistrationNo { get; set; }
-        public string? Country { get; set; }
-        public string? Governorate { get; set; }
+        public Guid? CustomerTypeId { get; set; }
+        public string? CustomerTypeName { get; set; }
+        public Guid? CountryId { get; set; }
+        public string? CountryName { get; set; }
+        public Guid? GovernorateId { get; set; }
+        public string? GovernorateName { get; set; }
         public string? City { get; set; }
         public string? BuildingNo { get; set; }
         public string? Floor { get; set; }
         public string? Apartment { get; set; }
         public string? StreetName { get; set; }
         public string? PostalCode { get; set; }
+        public string? Address { get; set; }
         public bool IsActive { get; set; }
     }
 
@@ -361,11 +618,10 @@
         [MaxLength(50)]
         public string TaxRegistrationNo { get; set; } = "";
 
-        [MaxLength(100)]
-        public string Country { get; set; } = "";
-
-        [MaxLength(100)]
-        public string Governorate { get; set; } = "";
+        public Guid? CustomerTypeId { get; set; }
+        public Guid? CountryId { get; set; }
+        public Guid? GovernorateId { get; set; }
+        public string? GovernorateText { get; set; }
 
         [MaxLength(100)]
         public string City { get; set; } = "";
@@ -385,12 +641,37 @@
         [MaxLength(20)]
         public string PostalCode { get; set; } = "";
 
+        [MaxLength(500)]
+        public string Address { get; set; } = "";
+
         public bool IsActive { get; set; } = true;
     }
 
     private sealed class UpdateCustomerModel : CreateCustomerModel
     {
         public Guid Id { get; set; }
+    }
+
+    private sealed class CountryOption
+    {
+        public Guid Id { get; set; }
+        public string Name { get; set; } = "";
+        public string NameAr { get; set; } = "";
+    }
+
+    private sealed class GovernorateOption
+    {
+        public Guid Id { get; set; }
+        public Guid CountryId { get; set; }
+        public string Name { get; set; } = "";
+        public string NameAr { get; set; } = "";
+    }
+
+    private sealed class CustomerTypeOption
+    {
+        public Guid Id { get; set; }
+        public string Name { get; set; } = "";
+        public string NameAr { get; set; } = "";
     }
 
     private static string? NullIfEmpty(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

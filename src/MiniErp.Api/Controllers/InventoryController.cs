@@ -35,6 +35,8 @@ public sealed class InventoryController(AppDbContext db) : ControllerBase
         .Take(2000)
         .ToListAsync(ct);
 
+
+
         return Ok(items);
     }
 
