@@ -67,6 +67,12 @@ public sealed class ApiClient(HttpClient http, ApiSession session)
         return await http.SendAsync(request, ct);
     }
 
+    public async Task<HttpResponseMessage> DeleteAsync(string path, CancellationToken ct = default)
+    {
+        using var request = await CreateRequestAsync(HttpMethod.Delete, path, ct);
+        return await http.SendAsync(request, ct);
+    }
+
     public async Task<HttpResponseMessage> PostAsync<T>(string path, T body, IReadOnlyDictionary<string, string> headers, CancellationToken ct = default)
     {
         var json = JsonSerializer.Serialize(body, Json);

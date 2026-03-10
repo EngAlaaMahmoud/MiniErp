@@ -3,6 +3,7 @@
 @inject ApiSession Session
 @inject ApiClient Api
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 @using System.ComponentModel.DataAnnotations
 
 <PageTitle>@L["Nav.ProductCompanies"]</PageTitle>
@@ -38,6 +39,7 @@
                                 <thead>
                                     <tr>
                                         <th>@L["Common.Name"]</th>
+                                        <th>تليفون</th>
                                         <th>@L["Common.Active"]</th>
                                         <th></th>
                                     </tr>
@@ -47,6 +49,7 @@
                                     {
                                         <tr>
                                             <td>@c.Name</td>
+                                            <td class="text-muted">@c.Phone</td>
                                             <td>@(c.IsActive ? L["Common.Yes"] : L["Common.No"])</td>
                                             <td class="text-end">
                                                 <button class="btn btn-sm btn-outline-secondary" @onclick="() => SelectForEdit(c)">@L["Common.Edit"]</button>
@@ -79,12 +82,42 @@
                                 <label class="form-label">@L["Common.Name"]</label>
                                 <InputText class="form-control" @bind-Value="_form.Name" />
                             </div>
+                            <div class="mb-2">
+                                <label class="form-label">العنوان</label>
+                                <InputText class="form-control" @bind-Value="_form.Address" />
+                            </div>
+                            <div class="row g-2">
+                                <div class="col-md-6">
+                                    <label class="form-label">فاكس</label>
+                                    <InputText class="form-control" @bind-Value="_form.Fax" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">بريد</label>
+                                    <InputText class="form-control" @bind-Value="_form.Email" />
+                                </div>
+                            </div>
+                            <div class="row g-2 mt-1">
+                                <div class="col-md-6">
+                                    <label class="form-label">تليفون</label>
+                                    <InputText class="form-control" @bind-Value="_form.Phone" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">موبايل</label>
+                                    <InputText class="form-control" @bind-Value="_form.Mobile" />
+                                </div>
+                            </div>
                             <div class="form-check mb-3">
                                 <InputCheckbox class="form-check-input" @bind-Value="_form.IsActive" />
                                 <label class="form-check-label">@L["Common.Active"]</label>
                             </div>
 
-                            <button class="btn btn-primary w-100" disabled="@_busy">@L["Common.Save"]</button>
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-primary flex-fill" disabled="@_busy">@L["Common.Save"]</button>
+                                @if (_form.Id is not null)
+                                {
+                                    <button type="button" class="btn btn-danger" @onclick="Delete" disabled="@_busy">@L["Common.Delete"]</button>
+                                }
+                            </div>
                         </EditForm>
                     </div>
                 </div>
@@ -153,6 +186,11 @@
         {
             Id = item.Id,
             Name = item.Name,
+            Address = item.Address,
+            Fax = item.Fax,
+            Email = item.Email,
+            Phone = item.Phone,
+            Mobile = item.Mobile,
             IsActive = item.IsActive
         };
     }
@@ -175,6 +213,11 @@
                 response = await Api.PostAsync("catalog/product-companies", new
                 {
                     name = _form.Name,
+                    address = string.IsNullOrWhiteSpace(_form.Address) ? null : _form.Address,
+                    fax = string.IsNullOrWhiteSpace(_form.Fax) ? null : _form.Fax,
+                    email = string.IsNullOrWhiteSpace(_form.Email) ? null : _form.Email,
+                    phone = string.IsNullOrWhiteSpace(_form.Phone) ? null : _form.Phone,
+                    mobile = string.IsNullOrWhiteSpace(_form.Mobile) ? null : _form.Mobile,
                     isActive = _form.IsActive
                 });
             }
@@ -183,6 +226,11 @@
                 response = await Api.PutAsync($"catalog/product-companies/{_form.Id}", new
                 {
                     name = _form.Name,
+                    address = string.IsNullOrWhiteSpace(_form.Address) ? null : _form.Address,
+                    fax = string.IsNullOrWhiteSpace(_form.Fax) ? null : _form.Fax,
+                    email = string.IsNullOrWhiteSpace(_form.Email) ? null : _form.Email,
+                    phone = string.IsNullOrWhiteSpace(_form.Phone) ? null : _form.Phone,
+                    mobile = string.IsNullOrWhiteSpace(_form.Mobile) ? null : _form.Mobile,
                     isActive = _form.IsActive
                 });
             }
@@ -202,10 +250,48 @@
         }
     }
 
+    private async Task Delete()
+    {
+        if (_form.Id is null)
+        {
+            return;
+        }
+
+        var ok = await JS.InvokeAsync<bool>("confirm", L["Common.ConfirmDelete"].Value);
+        if (!ok)
+        {
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            var response = await Api.DeleteAsync($"catalog/product-companies/{_form.Id}");
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = await response.Content.ReadAsStringAsync();
+                return;
+            }
+
+            ClearForm();
+            await Load();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
     private sealed class ProductCompanyItem
     {
         public Guid Id { get; set; }
         public string Name { get; set; } = "";
+        public string? Address { get; set; }
+        public string? Fax { get; set; }
+        public string? Email { get; set; }
+        public string? Phone { get; set; }
+        public string? Mobile { get; set; }
         public bool IsActive { get; set; }
     }
 
@@ -213,6 +299,11 @@
     {
         public Guid? Id { get; set; }
         [Required] public string Name { get; set; } = "";
+        public string? Address { get; set; }
+        public string? Fax { get; set; }
+        public string? Email { get; set; }
+        public string? Phone { get; set; }
+        public string? Mobile { get; set; }
         public bool IsActive { get; set; }
     }
 

@@ -3,6 +3,7 @@
 @inject ApiSession Session
 @inject ApiClient Api
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 @using System.ComponentModel.DataAnnotations
 
 <PageTitle>@L["Nav.Taxes"]</PageTitle>
@@ -58,6 +59,7 @@
                                         <th>@L["Taxes.Col.Description"]</th>
                                         <th class="text-end">@L["Taxes.Col.Percent"]</th>
                                         <th>@L["Common.Active"]</th>
+                                        <th></th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -70,6 +72,9 @@
                                             <td>@t.Description</td>
                                             <td class="text-end">@((t.Percent * 100).ToString("0.######"))%</td>
                                             <td>@(t.IsActive ? L["Common.Yes"] : L["Common.No"])</td>
+                                            <td class="text-end">
+                                                <button class="btn btn-sm btn-outline-secondary" @onclick="() => SelectTaxTypeForEdit(t)">@L["Common.Edit"]</button>
+                                            </td>
                                         </tr>
                                     }
                                 </tbody>
@@ -82,43 +87,55 @@
             <div class="col-lg-5">
                 <div class="card">
                     <div class="card-body">
-                        <div class="fw-bold mb-2">@L["Taxes.AddTaxType"]</div>
-                        <EditForm Model="_create" OnValidSubmit="Create">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <div class="fw-bold">@(_taxTypeForm.Id is null ? L["Taxes.AddTaxType"] : L["Common.Edit"])</div>
+                            @if (_taxTypeForm.Id is not null)
+                            {
+                                <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="ClearTaxTypeForm" disabled="@_busy">@L["Common.Cancel"]</button>
+                            }
+                        </div>
+                        <EditForm Model="_taxTypeForm" OnValidSubmit="SaveTaxType">
                             <DataAnnotationsValidator />
                             <ValidationSummary />
 
                             <div class="row g-2">
                                 <div class="col">
                                     <label class="form-label">@L["Taxes.Col.MainCode"]</label>
-                                    <InputText class="form-control" @bind-Value="_create.MainCode" />
+                                    <InputText class="form-control" @bind-Value="_taxTypeForm.MainCode" />
                                 </div>
                                 <div class="col">
                                     <label class="form-label">@L["Taxes.Col.SubCode"]</label>
-                                    <InputText class="form-control" @bind-Value="_create.SubCode" />
+                                    <InputText class="form-control" @bind-Value="_taxTypeForm.SubCode" />
                                 </div>
                             </div>
 
                             <div class="mb-2 mt-2">
                                 <label class="form-label">@L["Taxes.Col.TaxType"]</label>
-                                <InputText class="form-control" @bind-Value="_create.TaxType" />
+                                <InputText class="form-control" @bind-Value="_taxTypeForm.TaxType" />
                             </div>
 
                             <div class="mb-2">
                                 <label class="form-label">@L["Taxes.Col.Description"]</label>
-                                <InputText class="form-control" @bind-Value="_create.Description" />
+                                <InputText class="form-control" @bind-Value="_taxTypeForm.Description" />
                             </div>
 
                             <div class="mb-2">
                                 <label class="form-label">@L["Taxes.Col.Percent"] (0 - 100)</label>
-                                <InputNumber class="form-control" @bind-Value="_create.Percent" />
+                                <InputNumber class="form-control" @bind-Value="_taxTypeForm.Percent" />
                             </div>
 
                             <div class="form-check mb-3">
-                                <InputCheckbox class="form-check-input" @bind-Value="_create.IsActive" />
+                                <InputCheckbox class="form-check-input" @bind-Value="_taxTypeForm.IsActive" />
                                 <label class="form-check-label">نشط</label>
                             </div>
 
-                            <button class="btn btn-primary w-100" disabled="@_busy">حفظ</button>
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-primary flex-fill" disabled="@_busy">@L["Common.Save"]</button>
+                                @if (_taxTypeForm.Id is not null)
+                                {
+                                    <button type="button" class="btn btn-danger" @onclick="DeleteTaxType" disabled="@_busy">@L["Common.Delete"]</button>
+                                }
+                            </div>
                         </EditForm>
 
                         <div class="small text-muted mt-3">
@@ -152,6 +169,7 @@
                                             <th>Name</th>
                                             <th class="text-end">Percent</th>
                                             <th>Active</th>
+                                            <th></th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -161,6 +179,9 @@
                                                 <td>@r.Name</td>
                                                 <td class="text-end">@((r.Percent * 100).ToString("0.######"))%</td>
                                                 <td>@(r.IsActive ? L["Common.Yes"] : L["Common.No"])</td>
+                                                <td class="text-end">
+                                                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => SelectTaxRateForEdit(r)">@L["Common.Edit"]</button>
+                                                </td>
                                             </tr>
                                         }
                                     </tbody>
@@ -173,25 +194,37 @@
                 <div class="col-lg-5">
                     <div class="card">
                         <div class="card-body">
-                            <div class="fw-bold mb-2">Add Tax Rate</div>
-                            <EditForm Model="_createRate" OnValidSubmit="CreateRate">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <div class="fw-bold">@(_taxRateForm.Id is null ? "Add Tax Rate" : L["Common.Edit"])</div>
+                                @if (_taxRateForm.Id is not null)
+                                {
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="ClearTaxRateForm" disabled="@_busy">@L["Common.Cancel"]</button>
+                                }
+                            </div>
+                            <EditForm Model="_taxRateForm" OnValidSubmit="SaveTaxRate">
                                 <DataAnnotationsValidator />
                                 <ValidationSummary />
 
                                 <div class="mb-2">
                                     <label class="form-label">Name</label>
-                                    <InputText class="form-control" @bind-Value="_createRate.Name" />
+                                    <InputText class="form-control" @bind-Value="_taxRateForm.Name" />
                                 </div>
                                 <div class="mb-2">
                                     <label class="form-label">Percent (0 - 100)</label>
-                                    <InputNumber class="form-control" @bind-Value="_createRate.Percent" />
+                                    <InputNumber class="form-control" @bind-Value="_taxRateForm.Percent" />
                                 </div>
                                 <div class="form-check mb-3">
-                                    <InputCheckbox class="form-check-input" @bind-Value="_createRate.IsActive" />
+                                    <InputCheckbox class="form-check-input" @bind-Value="_taxRateForm.IsActive" />
                                     <label class="form-check-label">Active</label>
                                 </div>
 
-                                <button class="btn btn-primary w-100" disabled="@_busy">Save</button>
+                                <div class="d-flex gap-2">
+                                    <button class="btn btn-primary flex-fill" disabled="@_busy">Save</button>
+                                    @if (_taxRateForm.Id is not null)
+                                    {
+                                        <button type="button" class="btn btn-danger" @onclick="DeleteTaxRate" disabled="@_busy">@L["Common.Delete"]</button>
+                                    }
+                                </div>
                             </EditForm>
                         </div>
                     </div>
@@ -267,11 +300,11 @@
     private string? _error;
     private string _search = "";
     private List<TaxTypeItem> _items = [];
-    private CreateTaxTypeModel _create = new() { IsActive = true, TaxType = "VAT" };
+    private TaxTypeFormModel _taxTypeForm = new() { IsActive = true, TaxType = "VAT" };
 
     private string _ratesSearch = "";
     private List<TaxRateItem> _rates = [];
-    private CreateTaxRateModel _createRate = new() { IsActive = true, Percent = 14 };
+    private TaxRateFormModel _taxRateForm = new() { IsActive = true, Percent = 14 };
 
     private DateTime _reportFrom = DateTime.Today.AddDays(-30);
     private DateTime _reportTo = DateTime.Today;
@@ -360,22 +393,58 @@
         }
     }
 
-    private async Task Create()
+    private void SelectTaxTypeForEdit(TaxTypeItem item)
+    {
+        _taxTypeForm = new TaxTypeFormModel
+        {
+            Id = item.Id,
+            MainCode = item.MainCode,
+            SubCode = item.SubCode,
+            TaxType = item.TaxType,
+            Description = item.Description,
+            Percent = item.Percent * 100m,
+            IsActive = item.IsActive
+        };
+    }
+
+    private void ClearTaxTypeForm()
+    {
+        _taxTypeForm = new TaxTypeFormModel { IsActive = true, TaxType = _taxTypeForm.TaxType, Percent = _taxTypeForm.Percent };
+        _error = null;
+    }
+
+    private async Task SaveTaxType()
     {
         _busy = true;
         _error = null;
         try
         {
-            var percent = _create.Percent / 100m;
-            var response = await Api.PostAsync("taxes/types", new
+            var percent = _taxTypeForm.Percent / 100m;
+            HttpResponseMessage response;
+            if (_taxTypeForm.Id is null)
             {
-                mainCode = _create.MainCode,
-                subCode = _create.SubCode,
-                taxType = _create.TaxType,
-                description = _create.Description,
-                percent,
-                isActive = _create.IsActive
-            });
+                response = await Api.PostAsync("taxes/types", new
+                {
+                    mainCode = _taxTypeForm.MainCode,
+                    subCode = _taxTypeForm.SubCode,
+                    taxType = _taxTypeForm.TaxType,
+                    description = _taxTypeForm.Description,
+                    percent,
+                    isActive = _taxTypeForm.IsActive
+                });
+            }
+            else
+            {
+                response = await Api.PutAsync($"taxes/types/{_taxTypeForm.Id}", new
+                {
+                    mainCode = _taxTypeForm.MainCode,
+                    subCode = _taxTypeForm.SubCode,
+                    taxType = _taxTypeForm.TaxType,
+                    description = _taxTypeForm.Description,
+                    percent,
+                    isActive = _taxTypeForm.IsActive
+                });
+            }
 
             if (!response.IsSuccessStatusCode)
             {
@@ -383,7 +452,40 @@
                 return;
             }
 
-            _create = new CreateTaxTypeModel { IsActive = true, TaxType = _create.TaxType, Percent = _create.Percent };
+            ClearTaxTypeForm();
+            await Load();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DeleteTaxType()
+    {
+        if (_taxTypeForm.Id is null)
+        {
+            return;
+        }
+
+        var ok = await JS.InvokeAsync<bool>("confirm", L["Common.ConfirmDelete"].Value);
+        if (!ok)
+        {
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            var response = await Api.DeleteAsync($"taxes/types/{_taxTypeForm.Id}");
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = await response.Content.ReadAsStringAsync();
+                return;
+            }
+
+            ClearTaxTypeForm();
             await Load();
         }
         finally
@@ -423,19 +525,49 @@
         }
     }
 
-    private async Task CreateRate()
+    private void SelectTaxRateForEdit(TaxRateItem item)
+    {
+        _taxRateForm = new TaxRateFormModel
+        {
+            Id = item.Id,
+            Name = item.Name,
+            Percent = item.Percent * 100m,
+            IsActive = item.IsActive
+        };
+    }
+
+    private void ClearTaxRateForm()
+    {
+        _taxRateForm = new TaxRateFormModel { IsActive = true, Percent = _taxRateForm.Percent };
+        _error = null;
+    }
+
+    private async Task SaveTaxRate()
     {
         _busy = true;
         _error = null;
         try
         {
-            var percent = _createRate.Percent / 100m;
-            var response = await Api.PostAsync("taxes/rates", new
+            var percent = _taxRateForm.Percent / 100m;
+            HttpResponseMessage response;
+            if (_taxRateForm.Id is null)
             {
-                name = _createRate.Name,
-                percent,
-                isActive = _createRate.IsActive
-            });
+                response = await Api.PostAsync("taxes/rates", new
+                {
+                    name = _taxRateForm.Name,
+                    percent,
+                    isActive = _taxRateForm.IsActive
+                });
+            }
+            else
+            {
+                response = await Api.PutAsync($"taxes/rates/{_taxRateForm.Id}", new
+                {
+                    name = _taxRateForm.Name,
+                    percent,
+                    isActive = _taxRateForm.IsActive
+                });
+            }
 
             if (!response.IsSuccessStatusCode)
             {
@@ -443,7 +575,40 @@
                 return;
             }
 
-            _createRate = new CreateTaxRateModel { IsActive = true, Percent = _createRate.Percent };
+            ClearTaxRateForm();
+            await LoadRates();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DeleteTaxRate()
+    {
+        if (_taxRateForm.Id is null)
+        {
+            return;
+        }
+
+        var ok = await JS.InvokeAsync<bool>("confirm", L["Common.ConfirmDelete"].Value);
+        if (!ok)
+        {
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            var response = await Api.DeleteAsync($"taxes/rates/{_taxRateForm.Id}");
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = await response.Content.ReadAsStringAsync();
+                return;
+            }
+
+            ClearTaxRateForm();
             await LoadRates();
         }
         finally
@@ -504,8 +669,9 @@
         public bool IsActive { get; set; }
     }
 
-    private sealed class CreateTaxTypeModel
+    private sealed class TaxTypeFormModel
     {
+        public Guid? Id { get; set; }
         [Required] public string MainCode { get; set; } = "";
         [Required] public string SubCode { get; set; } = "";
         [Required] public string TaxType { get; set; } = "";
@@ -522,8 +688,9 @@
         public bool IsActive { get; set; }
     }
 
-    private sealed class CreateTaxRateModel
+    private sealed class TaxRateFormModel
     {
+        public Guid? Id { get; set; }
         [Required] public string Name { get; set; } = "";
         public decimal Percent { get; set; }
         public bool IsActive { get; set; }

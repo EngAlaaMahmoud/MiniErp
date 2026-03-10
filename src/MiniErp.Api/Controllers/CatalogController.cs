@@ -529,7 +529,7 @@ public sealed class CatalogController(AppDbContext db) : ControllerBase
         var items = await db.ProductCompanies
             .OrderBy(x => x.Name)
             .Take(500)
-            .Select(x => new ProductCompanyListItem(x.Id, x.Name, x.IsActive))
+            .Select(x => new ProductCompanyListItem(x.Id, x.Name, x.Address, x.Fax, x.Email, x.Phone, x.Mobile, x.IsActive))
             .ToListAsync(ct);
 
         return Ok(items);
@@ -555,6 +555,11 @@ public sealed class CatalogController(AppDbContext db) : ControllerBase
             Id = Guid.NewGuid(),
             TenantId = tenantId,
             Name = request.Name.Trim(),
+            Address = string.IsNullOrWhiteSpace(request.Address) ? null : request.Address.Trim(),
+            Fax = string.IsNullOrWhiteSpace(request.Fax) ? null : request.Fax.Trim(),
+            Email = string.IsNullOrWhiteSpace(request.Email) ? null : request.Email.Trim(),
+            Phone = string.IsNullOrWhiteSpace(request.Phone) ? null : request.Phone.Trim(),
+            Mobile = string.IsNullOrWhiteSpace(request.Mobile) ? null : request.Mobile.Trim(),
             IsActive = request.IsActive,
             CreatedAt = DateTimeOffset.UtcNow
         };
@@ -569,7 +574,7 @@ public sealed class CatalogController(AppDbContext db) : ControllerBase
             return Conflict(new { error = "DUPLICATE_NAME" });
         }
 
-        return CreatedAtAction(nameof(GetProductCompanies), new { id = entity.Id }, new ProductCompanyListItem(entity.Id, entity.Name, entity.IsActive));
+        return CreatedAtAction(nameof(GetProductCompanies), new { id = entity.Id }, new ProductCompanyListItem(entity.Id, entity.Name, entity.Address, entity.Fax, entity.Email, entity.Phone, entity.Mobile, entity.IsActive));
     }
 
     [HttpPut("product-companies/{id:guid}")]
@@ -593,6 +598,11 @@ public sealed class CatalogController(AppDbContext db) : ControllerBase
         }
 
         entity.Name = request.Name.Trim();
+        entity.Address = string.IsNullOrWhiteSpace(request.Address) ? null : request.Address.Trim();
+        entity.Fax = string.IsNullOrWhiteSpace(request.Fax) ? null : request.Fax.Trim();
+        entity.Email = string.IsNullOrWhiteSpace(request.Email) ? null : request.Email.Trim();
+        entity.Phone = string.IsNullOrWhiteSpace(request.Phone) ? null : request.Phone.Trim();
+        entity.Mobile = string.IsNullOrWhiteSpace(request.Mobile) ? null : request.Mobile.Trim();
         entity.IsActive = request.IsActive;
 
         try
@@ -604,6 +614,33 @@ public sealed class CatalogController(AppDbContext db) : ControllerBase
             return Conflict(new { error = "DUPLICATE_NAME" });
         }
 
+        return NoContent();
+    }
+
+    [HttpDelete("product-companies/{id:guid}")]
+    [RequirePermission(PermissionKeys.CatalogEdit)]
+    public async Task<IActionResult> DeleteProductCompany([FromRoute] Guid id, CancellationToken ct)
+    {
+        if (id == Guid.Empty)
+        {
+            return BadRequest(new { error = "INVALID_ID" });
+        }
+
+        var entity = await db.ProductCompanies.SingleOrDefaultAsync(x => x.Id == id, ct);
+        if (entity is null)
+        {
+            return NotFound(new { error = "NOT_FOUND" });
+        }
+
+        var nameUpper = entity.Name.Trim().ToUpperInvariant();
+        var inUse = await db.Products.AnyAsync(x => x.BrandName != null && x.BrandName.Trim().ToUpper() == nameUpper, ct);
+        if (inUse)
+        {
+            return BadRequest(new { error = "IN_USE" });
+        }
+
+        db.ProductCompanies.Remove(entity);
+        await db.SaveChangesAsync(ct);
         return NoContent();
     }
 
@@ -620,7 +657,7 @@ public sealed class CatalogController(AppDbContext db) : ControllerBase
         var items = await db.UnitMeasures
             .OrderBy(x => x.Name)
             .Take(500)
-            .Select(x => new UnitMeasureListItem(x.Id, x.Name, x.IsActive))
+            .Select(x => new UnitMeasureListItem(x.Id, x.Name, x.Capacity, x.IsActive))
             .ToListAsync(ct);
 
         return Ok(items);
@@ -647,11 +684,17 @@ public sealed class CatalogController(AppDbContext db) : ControllerBase
             name = name[..50];
         }
 
+        if (request.Capacity <= 0)
+        {
+            return BadRequest(new { error = "INVALID_CAPACITY" });
+        }
+
         var entity = new UnitMeasure
         {
             Id = Guid.NewGuid(),
             TenantId = tenantId,
             Name = name,
+            Capacity = request.Capacity,
             IsActive = request.IsActive,
             CreatedAt = DateTimeOffset.UtcNow
         };
@@ -666,7 +709,7 @@ public sealed class CatalogController(AppDbContext db) : ControllerBase
             return Conflict(new { error = "DUPLICATE_NAME" });
         }
 
-        return CreatedAtAction(nameof(GetUnitMeasures), new { id = entity.Id }, new UnitMeasureListItem(entity.Id, entity.Name, entity.IsActive));
+        return CreatedAtAction(nameof(GetUnitMeasures), new { id = entity.Id }, new UnitMeasureListItem(entity.Id, entity.Name, entity.Capacity, entity.IsActive));
     }
 
     [HttpPut("unit-measures/{id:guid}")]
@@ -695,7 +738,13 @@ public sealed class CatalogController(AppDbContext db) : ControllerBase
             name = name[..50];
         }
 
+        if (request.Capacity <= 0)
+        {
+            return BadRequest(new { error = "INVALID_CAPACITY" });
+        }
+
         entity.Name = name;
+        entity.Capacity = request.Capacity;
         entity.IsActive = request.IsActive;
 
         try
@@ -707,6 +756,51 @@ public sealed class CatalogController(AppDbContext db) : ControllerBase
             return Conflict(new { error = "DUPLICATE_NAME" });
         }
 
+        return NoContent();
+    }
+
+    [HttpDelete("unit-measures/{id:guid}")]
+    [RequirePermission(PermissionKeys.CatalogEdit)]
+    public async Task<IActionResult> DeleteUnitMeasure([FromRoute] Guid id, CancellationToken ct)
+    {
+        if (id == Guid.Empty)
+        {
+            return BadRequest(new { error = "INVALID_ID" });
+        }
+
+        var entity = await db.UnitMeasures.SingleOrDefaultAsync(x => x.Id == id, ct);
+        if (entity is null)
+        {
+            return NotFound(new { error = "NOT_FOUND" });
+        }
+
+        var nameUpper = entity.Name.Trim().ToUpperInvariant();
+        var inProductUnits = await db.ProductUnits.AnyAsync(x => x.Name.Trim().ToUpper() == nameUpper, ct);
+        if (inProductUnits)
+        {
+            return BadRequest(new { error = "IN_USE" });
+        }
+
+        var inSales = await db.SaleItems.AnyAsync(x => x.UnitName != null && x.UnitName.Trim().ToUpper() == nameUpper, ct);
+        if (inSales)
+        {
+            return BadRequest(new { error = "IN_USE" });
+        }
+
+        var inPurchases = await db.PurchaseItems.AnyAsync(x => x.UnitName != null && x.UnitName.Trim().ToUpper() == nameUpper, ct);
+        if (inPurchases)
+        {
+            return BadRequest(new { error = "IN_USE" });
+        }
+
+        var inReturns = await db.ReturnItems.AnyAsync(x => x.UnitName != null && x.UnitName.Trim().ToUpper() == nameUpper, ct);
+        if (inReturns)
+        {
+            return BadRequest(new { error = "IN_USE" });
+        }
+
+        db.UnitMeasures.Remove(entity);
+        await db.SaveChangesAsync(ct);
         return NoContent();
     }
 
