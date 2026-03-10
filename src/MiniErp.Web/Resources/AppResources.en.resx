@@ -17,6 +17,8 @@
   <data name="Nav.Invoices" xml:space="preserve"><value>Invoices</value></data>
   <data name="Nav.Products" xml:space="preserve"><value>Products</value></data>
   <data name="Nav.Categories" xml:space="preserve"><value>Categories</value></data>
+  <data name="Nav.ProductCompanies" xml:space="preserve"><value>Product Companies</value></data>
+  <data name="Nav.UnitMeasures" xml:space="preserve"><value>Unit Measures</value></data>
   <data name="Nav.Inventory" xml:space="preserve"><value>Inventory</value></data>
   <data name="Nav.Taxes" xml:space="preserve"><value>Taxes</value></data>
   <data name="Nav.Customers" xml:space="preserve"><value>Customers</value></data>
@@ -304,6 +306,7 @@
   <data name="Products.Field.EgsCode" xml:space="preserve"><value>EGS/GIS code</value></data>
   <data name="Products.Field.VatRate" xml:space="preserve"><value>VAT rate</value></data>
   <data name="Products.Error.VatRateRequired" xml:space="preserve"><value>Select VAT rate</value></data>
+  <data name="Products.Error.CategoryRequired" xml:space="preserve"><value>Select product group</value></data>
   <data name="Products.Field.TaxCodeSales" xml:space="preserve"><value>Sales tax code</value></data>
   <data name="Products.Field.Cost" xml:space="preserve"><value>Cost</value></data>
   <data name="Products.Field.ReorderLevel" xml:space="preserve"><value>Reorder level</value></data>

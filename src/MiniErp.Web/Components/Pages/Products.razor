@@ -498,7 +498,16 @@
                                                 </div>
                                                 <div class="col-md-4">
                                                     <label class="form-label">@L["Products.Field.CompanyName"]</label>
-                                                    <InputText class="form-control" @bind-Value="_create.BrandName" />
+                                                    <InputSelect class="form-select" @bind-Value="_create.ProductCompanyId">
+                                                        <option value="">-</option>
+                                                        @foreach (var c in _productCompanies.Where(x => x.IsActive))
+                                                        {
+                                                            <option value="@c.Id">@c.Name</option>
+                                                        }
+                                                    </InputSelect>
+                                                    <div class="form-text">
+                                                        <a href="/product-companies" target="_blank">@L["Nav.ProductCompanies"]</a>
+                                                    </div>
                                                 </div>
                                                 <div class="col-md-4">
                                                     <label class="form-label">@L["Products.Field.ProductGroup"]</label>
@@ -538,7 +547,16 @@
                                             <div class="row g-2 mb-2">
                                                 <div class="col-md-6">
                                                     <label class="form-label">@L["Products.Field.UnitMeasure"]</label>
-                                                    <InputText class="form-control" @bind-Value="_create.DefaultUnitName" />
+                                                    <InputSelect class="form-select" @bind-Value="_create.UnitMeasureId">
+                                                        <option value="">-</option>
+                                                        @foreach (var u in _unitMeasures.Where(x => x.IsActive))
+                                                        {
+                                                            <option value="@u.Id">@u.Name</option>
+                                                        }
+                                                    </InputSelect>
+                                                    <div class="form-text">
+                                                        <a href="/unit-measures" target="_blank">@L["Nav.UnitMeasures"]</a>
+                                                    </div>
                                                 </div>
                                                 <div class="col-md-6">
                                                     <label class="form-label">@L["Products.Field.ReorderLevel"]</label>
@@ -716,7 +734,20 @@
                                                 </div>
                                                 <div class="col-md-4">
                                                     <label class="form-label">@L["Products.Field.CompanyName"]</label>
-                                                    <InputText class="form-control" @bind-Value="_edit.BrandName" />
+                                                    <InputSelect class="form-select" @bind-Value="_edit.ProductCompanyId">
+                                                        <option value="">-</option>
+                                                        @foreach (var c in _productCompanies.Where(x => x.IsActive))
+                                                        {
+                                                            <option value="@c.Id">@c.Name</option>
+                                                        }
+                                                    </InputSelect>
+                                                    @if (_edit.ProductCompanyId is null && !string.IsNullOrWhiteSpace(_edit.BrandName))
+                                                    {
+                                                        <div class="text-muted small">@_edit.BrandName</div>
+                                                    }
+                                                    <div class="form-text">
+                                                        <a href="/product-companies" target="_blank">@L["Nav.ProductCompanies"]</a>
+                                                    </div>
                                                 </div>
                                                 <div class="col-md-4">
                                                     <label class="form-label">@L["Products.Field.ProductGroup"]</label>
@@ -756,7 +787,20 @@
                                             <div class="row g-2 mb-2">
                                                 <div class="col-md-6">
                                                     <label class="form-label">@L["Products.Field.UnitMeasure"]</label>
-                                                    <InputText class="form-control" @bind-Value="_edit.DefaultUnitName" />
+                                                    <InputSelect class="form-select" @bind-Value="_edit.UnitMeasureId">
+                                                        <option value="">-</option>
+                                                        @foreach (var u in _unitMeasures.Where(x => x.IsActive))
+                                                        {
+                                                            <option value="@u.Id">@u.Name</option>
+                                                        }
+                                                    </InputSelect>
+                                                    @if (_edit.UnitMeasureId is null && !string.IsNullOrWhiteSpace(_edit.DefaultUnitName))
+                                                    {
+                                                        <div class="text-muted small">@_edit.DefaultUnitName</div>
+                                                    }
+                                                    <div class="form-text">
+                                                        <a href="/unit-measures" target="_blank">@L["Nav.UnitMeasures"]</a>
+                                                    </div>
                                                 </div>
                                                 <div class="col-md-6">
                                                     <label class="form-label">@L["Products.Field.ReorderLevel"]</label>
@@ -1022,10 +1066,14 @@
     private string _search = "";
     private List<ProductItem> _products = [];
     private List<CategoryItem> _categories = [];
+    private List<ProductCompanyLookupItem> _productCompanies = [];
+    private List<UnitMeasureLookupItem> _unitMeasures = [];
     private List<TaxRateItem> _taxRates = [];
     private List<TaxTypeItem> _taxTypes = [];
 
     private Dictionary<Guid, string> _categoryNameById = [];
+    private Dictionary<Guid, string> _productCompanyNameById = [];
+    private Dictionary<Guid, string> _unitMeasureNameById = [];
     private Dictionary<Guid, string> _taxRateNameById = [];
     private Dictionary<Guid, string> _taxTypeNameById = [];
     private ProductModalMode _modalMode = ProductModalMode.None;
@@ -1056,10 +1104,30 @@
         {
             _create.CategoryId = _categories[0].Id;
         }
+        else if (_create.CategoryId is null && _categories.Count > 0)
+        {
+            _create.CategoryId = _categories.FirstOrDefault(x => x.IsActive)?.Id ?? _categories[0].Id;
+        }
+
+        var activeCompanies = _productCompanies.Where(x => x.IsActive).ToList();
+        if (_create.ProductCompanyId is null && activeCompanies.Count == 1)
+        {
+            _create.ProductCompanyId = activeCompanies[0].Id;
+        }
+
+        var activeUnits = _unitMeasures.Where(x => x.IsActive).ToList();
+        if (_create.UnitMeasureId is null && activeUnits.Count == 1)
+        {
+            _create.UnitMeasureId = activeUnits[0].Id;
+        }
 
         if (_create.TaxRateId is null && _taxRates.Count == 1)
         {
             _create.TaxRateId = _taxRates[0].Id;
+        }
+        else if (_create.TaxRateId is null && _taxRates.Count > 0)
+        {
+            _create.TaxRateId = _taxRates.FirstOrDefault(x => x.IsActive)?.Id ?? _taxRates[0].Id;
         }
 
         if (_create.SalesTaxTypeId is null && _taxTypes.Count == 1)
@@ -1162,10 +1230,14 @@
     private async Task LoadLookups()
     {
         _categories = await Api.GetAsync<List<CategoryItem>>("catalog/categories");
+        _productCompanies = await Api.GetAsync<List<ProductCompanyLookupItem>>("catalog/product-companies");
+        _unitMeasures = await Api.GetAsync<List<UnitMeasureLookupItem>>("catalog/unit-measures");
         _taxRates = await Api.GetAsync<List<TaxRateItem>>("taxes/rates");
         _taxTypes = await Api.GetAsync<List<TaxTypeItem>>("taxes/types");
 
         _categoryNameById = _categories.ToDictionary(x => x.Id, x => x.Name);
+        _productCompanyNameById = _productCompanies.ToDictionary(x => x.Id, x => x.Name);
+        _unitMeasureNameById = _unitMeasures.ToDictionary(x => x.Id, x => x.Name);
         _taxRateNameById = _taxRates.ToDictionary(x => x.Id, x => x.Name);
         _taxTypeNameById = _taxTypes.ToDictionary(x => x.Id, x => $"{x.MainCode}/{x.SubCode}");
 
@@ -1216,15 +1288,24 @@
                 return;
             }
 
+            if (_create.CategoryId is null || _create.CategoryId.Value == Guid.Empty)
+            {
+                _error = L["Products.Error.CategoryRequired"].Value;
+                return;
+            }
+
+            var resolvedCompanyName = ResolveOptionalLookupName(_productCompanyNameById, _create.ProductCompanyId, _create.BrandName);
+            var resolvedUnitName = ResolveOptionalLookupName(_unitMeasureNameById, _create.UnitMeasureId, _create.DefaultUnitName);
+
             var response = await Api.PostAsync("catalog/products", new
             {
                 name = _create.Name,
                 sku = string.IsNullOrWhiteSpace(_create.Sku) ? null : _create.Sku,
-                brandName = string.IsNullOrWhiteSpace(_create.BrandName) ? null : _create.BrandName,
+                brandName = resolvedCompanyName,
                 description = string.IsNullOrWhiteSpace(_create.Description) ? null : _create.Description,
                 price = _create.Price,
                 defaultDiscount = _create.DefaultDiscount,
-                defaultUnitName = string.IsNullOrWhiteSpace(_create.DefaultUnitName) ? null : _create.DefaultUnitName,
+                defaultUnitName = resolvedUnitName,
                 cost = _create.Cost,
                 categoryId = _create.CategoryId,
                 taxRateId = _create.TaxRateId,
@@ -1288,6 +1369,8 @@
             ReorderLevel = p.ReorderLevel,
             IsActive = p.IsActive
         };
+        _edit.ProductCompanyId = FindLookupIdByName(_productCompanies, _edit.BrandName);
+        _edit.UnitMeasureId = FindLookupIdByName(_unitMeasures, _edit.DefaultUnitName);
         if (_edit.TaxRateId is null && _taxRates.Count == 1)
         {
             _edit.TaxRateId = _taxRates[0].Id;
@@ -1317,15 +1400,24 @@
                 return;
             }
 
+            if (_edit.CategoryId is null || _edit.CategoryId.Value == Guid.Empty)
+            {
+                _error = L["Products.Error.CategoryRequired"].Value;
+                return;
+            }
+
+            var resolvedCompanyName = ResolveOptionalLookupName(_productCompanyNameById, _edit.ProductCompanyId, _edit.BrandName);
+            var resolvedUnitName = ResolveOptionalLookupName(_unitMeasureNameById, _edit.UnitMeasureId, _edit.DefaultUnitName);
+
             var response = await Api.PutAsync($"catalog/products/{_edit.Id}", new
             {
                 name = _edit.Name,
                 sku = string.IsNullOrWhiteSpace(_edit.Sku) ? null : _edit.Sku,
-                brandName = string.IsNullOrWhiteSpace(_edit.BrandName) ? null : _edit.BrandName,
+                brandName = resolvedCompanyName,
                 description = string.IsNullOrWhiteSpace(_edit.Description) ? null : _edit.Description,
                 price = _edit.Price,
                 defaultDiscount = _edit.DefaultDiscount,
-                defaultUnitName = string.IsNullOrWhiteSpace(_edit.DefaultUnitName) ? null : _edit.DefaultUnitName,
+                defaultUnitName = resolvedUnitName,
                 cost = _edit.Cost,
                 categoryId = _edit.CategoryId,
                 taxRateId = _edit.TaxRateId,
@@ -1675,13 +1767,15 @@
         [Required] public string Name { get; set; } = "";
         public string? Sku { get; set; }
         public string? BrandName { get; set; }
+        public Guid? ProductCompanyId { get; set; }
         public string? Description { get; set; }
         public decimal Price { get; set; }
         public decimal DefaultDiscount { get; set; }
         public string? DefaultUnitName { get; set; }
+        public Guid? UnitMeasureId { get; set; }
         public string? PrimaryBarcode { get; set; }
         public decimal Cost { get; set; }
-        public Guid? CategoryId { get; set; }
+        [Required] public Guid? CategoryId { get; set; }
         public Guid? TaxRateId { get; set; }
         public Guid? SalesTaxTypeId { get; set; }
         public decimal ReorderLevel { get; set; }
@@ -1707,6 +1801,40 @@
         public Guid SalesTaxTypeId { get; set; }
     }
 
+    private static string? ResolveOptionalLookupName(IReadOnlyDictionary<Guid, string> map, Guid? id, string? fallback)
+    {
+        if (id is null || id.Value == Guid.Empty)
+        {
+            return string.IsNullOrWhiteSpace(fallback) ? null : fallback.Trim();
+        }
+
+        return map.TryGetValue(id.Value, out var name) ? name : (string.IsNullOrWhiteSpace(fallback) ? null : fallback.Trim());
+    }
+
+    private static Guid? FindLookupIdByName(IEnumerable<ProductCompanyLookupItem> items, string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return null;
+        }
+
+        var n = name.Trim();
+        var match = items.FirstOrDefault(x => string.Equals(x.Name, n, StringComparison.OrdinalIgnoreCase));
+        return match?.Id;
+    }
+
+    private static Guid? FindLookupIdByName(IEnumerable<UnitMeasureLookupItem> items, string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return null;
+        }
+
+        var n = name.Trim();
+        var match = items.FirstOrDefault(x => string.Equals(x.Name, n, StringComparison.OrdinalIgnoreCase));
+        return match?.Id;
+    }
+
     private static string LookupName(IReadOnlyDictionary<Guid, string> map, Guid? id)
     {
         if (id is null)
@@ -1718,6 +1846,20 @@
     }
 
     private sealed class CategoryItem
+    {
+        public Guid Id { get; set; }
+        public string Name { get; set; } = "";
+        public bool IsActive { get; set; }
+    }
+
+    private sealed class ProductCompanyLookupItem
+    {
+        public Guid Id { get; set; }
+        public string Name { get; set; } = "";
+        public bool IsActive { get; set; }
+    }
+
+    private sealed class UnitMeasureLookupItem
     {
         public Guid Id { get; set; }
         public string Name { get; set; } = "";

@@ -19,6 +19,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options, ITenant
     public DbSet<ProductTax> ProductTaxes => Set<ProductTax>();
     public DbSet<Barcode> Barcodes => Set<Barcode>();
     public DbSet<Category> Categories => Set<Category>();
+    public DbSet<ProductCompany> ProductCompanies => Set<ProductCompany>();
+    public DbSet<UnitMeasure> UnitMeasures => Set<UnitMeasure>();
     public DbSet<TaxRate> TaxRates => Set<TaxRate>();
     public DbSet<Customer> Customers => Set<Customer>();
 
@@ -151,6 +153,26 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options, ITenant
             b.HasIndex(x => new { x.TenantId, x.Name }).IsUnique();
             b.HasIndex(x => new { x.TenantId, x.ParentId });
             b.Property(x => x.Name).HasMaxLength(200).IsRequired();
+            b.HasQueryFilter(x => x.TenantId == TenantId);
+        });
+
+        modelBuilder.Entity<ProductCompany>(b =>
+        {
+            b.ToTable("ProductCompanies");
+            b.HasKey(x => x.Id);
+            b.HasIndex(x => new { x.TenantId, x.Name }).IsUnique();
+            b.Property(x => x.Name).HasMaxLength(200).IsRequired();
+            b.Property(x => x.CreatedAt).IsRequired();
+            b.HasQueryFilter(x => x.TenantId == TenantId);
+        });
+
+        modelBuilder.Entity<UnitMeasure>(b =>
+        {
+            b.ToTable("UnitMeasures");
+            b.HasKey(x => x.Id);
+            b.HasIndex(x => new { x.TenantId, x.Name }).IsUnique();
+            b.Property(x => x.Name).HasMaxLength(50).IsRequired();
+            b.Property(x => x.CreatedAt).IsRequired();
             b.HasQueryFilter(x => x.TenantId == TenantId);
         });
 

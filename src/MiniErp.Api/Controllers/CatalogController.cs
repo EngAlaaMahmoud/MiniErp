@@ -516,6 +516,200 @@ public sealed class CatalogController(AppDbContext db) : ControllerBase
         return NoContent();
     }
 
+    [HttpGet("product-companies")]
+    [RequirePermission(PermissionKeys.CatalogView)]
+    public async Task<ActionResult<IReadOnlyList<ProductCompanyListItem>>> GetProductCompanies(CancellationToken ct)
+    {
+        var tenantId = db.TenantId;
+        if (tenantId == Guid.Empty)
+        {
+            return BadRequest(new { error = "TENANT_REQUIRED" });
+        }
+
+        var items = await db.ProductCompanies
+            .OrderBy(x => x.Name)
+            .Take(500)
+            .Select(x => new ProductCompanyListItem(x.Id, x.Name, x.IsActive))
+            .ToListAsync(ct);
+
+        return Ok(items);
+    }
+
+    [HttpPost("product-companies")]
+    [RequirePermission(PermissionKeys.CatalogEdit)]
+    public async Task<IActionResult> CreateProductCompany([FromBody] CreateProductCompanyRequest request, CancellationToken ct)
+    {
+        var tenantId = db.TenantId;
+        if (tenantId == Guid.Empty)
+        {
+            return BadRequest(new { error = "TENANT_REQUIRED" });
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Name))
+        {
+            return BadRequest(new { error = "NAME_REQUIRED" });
+        }
+
+        var entity = new ProductCompany
+        {
+            Id = Guid.NewGuid(),
+            TenantId = tenantId,
+            Name = request.Name.Trim(),
+            IsActive = request.IsActive,
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+
+        db.ProductCompanies.Add(entity);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException)
+        {
+            return Conflict(new { error = "DUPLICATE_NAME" });
+        }
+
+        return CreatedAtAction(nameof(GetProductCompanies), new { id = entity.Id }, new ProductCompanyListItem(entity.Id, entity.Name, entity.IsActive));
+    }
+
+    [HttpPut("product-companies/{id:guid}")]
+    [RequirePermission(PermissionKeys.CatalogEdit)]
+    public async Task<IActionResult> UpdateProductCompany([FromRoute] Guid id, [FromBody] UpdateProductCompanyRequest request, CancellationToken ct)
+    {
+        if (id == Guid.Empty)
+        {
+            return BadRequest(new { error = "INVALID_ID" });
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Name))
+        {
+            return BadRequest(new { error = "NAME_REQUIRED" });
+        }
+
+        var entity = await db.ProductCompanies.SingleOrDefaultAsync(x => x.Id == id, ct);
+        if (entity is null)
+        {
+            return NotFound(new { error = "NOT_FOUND" });
+        }
+
+        entity.Name = request.Name.Trim();
+        entity.IsActive = request.IsActive;
+
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException)
+        {
+            return Conflict(new { error = "DUPLICATE_NAME" });
+        }
+
+        return NoContent();
+    }
+
+    [HttpGet("unit-measures")]
+    [RequirePermission(PermissionKeys.CatalogView)]
+    public async Task<ActionResult<IReadOnlyList<UnitMeasureListItem>>> GetUnitMeasures(CancellationToken ct)
+    {
+        var tenantId = db.TenantId;
+        if (tenantId == Guid.Empty)
+        {
+            return BadRequest(new { error = "TENANT_REQUIRED" });
+        }
+
+        var items = await db.UnitMeasures
+            .OrderBy(x => x.Name)
+            .Take(500)
+            .Select(x => new UnitMeasureListItem(x.Id, x.Name, x.IsActive))
+            .ToListAsync(ct);
+
+        return Ok(items);
+    }
+
+    [HttpPost("unit-measures")]
+    [RequirePermission(PermissionKeys.CatalogEdit)]
+    public async Task<IActionResult> CreateUnitMeasure([FromBody] CreateUnitMeasureRequest request, CancellationToken ct)
+    {
+        var tenantId = db.TenantId;
+        if (tenantId == Guid.Empty)
+        {
+            return BadRequest(new { error = "TENANT_REQUIRED" });
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Name))
+        {
+            return BadRequest(new { error = "NAME_REQUIRED" });
+        }
+
+        var name = request.Name.Trim();
+        if (name.Length > 50)
+        {
+            name = name[..50];
+        }
+
+        var entity = new UnitMeasure
+        {
+            Id = Guid.NewGuid(),
+            TenantId = tenantId,
+            Name = name,
+            IsActive = request.IsActive,
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+
+        db.UnitMeasures.Add(entity);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException)
+        {
+            return Conflict(new { error = "DUPLICATE_NAME" });
+        }
+
+        return CreatedAtAction(nameof(GetUnitMeasures), new { id = entity.Id }, new UnitMeasureListItem(entity.Id, entity.Name, entity.IsActive));
+    }
+
+    [HttpPut("unit-measures/{id:guid}")]
+    [RequirePermission(PermissionKeys.CatalogEdit)]
+    public async Task<IActionResult> UpdateUnitMeasure([FromRoute] Guid id, [FromBody] UpdateUnitMeasureRequest request, CancellationToken ct)
+    {
+        if (id == Guid.Empty)
+        {
+            return BadRequest(new { error = "INVALID_ID" });
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Name))
+        {
+            return BadRequest(new { error = "NAME_REQUIRED" });
+        }
+
+        var entity = await db.UnitMeasures.SingleOrDefaultAsync(x => x.Id == id, ct);
+        if (entity is null)
+        {
+            return NotFound(new { error = "NOT_FOUND" });
+        }
+
+        var name = request.Name.Trim();
+        if (name.Length > 50)
+        {
+            name = name[..50];
+        }
+
+        entity.Name = name;
+        entity.IsActive = request.IsActive;
+
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException)
+        {
+            return Conflict(new { error = "DUPLICATE_NAME" });
+        }
+
+        return NoContent();
+    }
+
     [HttpGet("products/{productId:guid}/taxes")]
     [RequirePermission(PermissionKeys.CatalogView)]
     public async Task<ActionResult<IReadOnlyList<ProductTaxListItem>>> GetProductTaxes([FromRoute] Guid productId, CancellationToken ct)

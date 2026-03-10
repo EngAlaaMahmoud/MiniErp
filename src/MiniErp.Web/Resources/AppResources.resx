@@ -17,6 +17,8 @@
   <data name="Nav.Invoices" xml:space="preserve"><value>الفواتير</value></data>
   <data name="Nav.Products" xml:space="preserve"><value>المنتجات</value></data>
   <data name="Nav.Categories" xml:space="preserve"><value>التصنيفات</value></data>
+  <data name="Nav.ProductCompanies" xml:space="preserve"><value>شركات المنتجات</value></data>
+  <data name="Nav.UnitMeasures" xml:space="preserve"><value>وحدات القياس</value></data>
   <data name="Nav.Inventory" xml:space="preserve"><value>المخزون</value></data>
   <data name="Nav.Taxes" xml:space="preserve"><value>الضرائب</value></data>
   <data name="Nav.Customers" xml:space="preserve"><value>العملاء</value></data>
@@ -304,6 +306,7 @@
   <data name="Products.Field.EgsCode" xml:space="preserve"><value>كود EGS/GIS</value></data>
   <data name="Products.Field.VatRate" xml:space="preserve"><value>نسبة VAT</value></data>
   <data name="Products.Error.VatRateRequired" xml:space="preserve"><value>اختر نسبة VAT</value></data>
+  <data name="Products.Error.CategoryRequired" xml:space="preserve"><value>اختر مجموعة الصنف</value></data>
   <data name="Products.Field.TaxCodeSales" xml:space="preserve"><value>كود الضريبة (مبيعات)</value></data>
   <data name="Products.Field.Cost" xml:space="preserve"><value>التكلفة</value></data>
   <data name="Products.Field.ReorderLevel" xml:space="preserve"><value>حد إعادة الطلب</value></data>

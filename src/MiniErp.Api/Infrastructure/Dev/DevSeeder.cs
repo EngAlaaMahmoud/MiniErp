@@ -92,6 +92,19 @@ public sealed class DevSeeder(IServiceProvider serviceProvider, ILogger<DevSeede
             });
         }
 
+        var hasAnyUnitMeasures = await db.UnitMeasures.IgnoreQueryFilters().AnyAsync(x => x.TenantId == tenantId, cancellationToken);
+        if (!hasAnyUnitMeasures)
+        {
+            db.UnitMeasures.Add(new UnitMeasure
+            {
+                Id = Guid.NewGuid(),
+                TenantId = tenantId,
+                Name = "Unit",
+                IsActive = true,
+                CreatedAt = DateTimeOffset.UtcNow
+            });
+        }
+
         var vat14Exists = await db.TaxRates.IgnoreQueryFilters().AnyAsync(x => x.TenantId == tenantId && x.Id == vat14Id, cancellationToken);
         if (!vat14Exists)
         {
