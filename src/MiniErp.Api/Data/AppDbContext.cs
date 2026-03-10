@@ -25,7 +25,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options, ITenant
     public DbSet<Sale> Sales => Set<Sale>();
     public DbSet<SaleItem> SaleItems => Set<SaleItem>();
     public DbSet<Payment> Payments => Set<Payment>();
-
+    public DbSet<Country> Countries => Set<Country>();
+    public DbSet<Governorate> Governorates => Set<Governorate>();
+    public DbSet<CustomerType> CustomerTypes => Set<CustomerType>();
     public DbSet<Return> Returns => Set<Return>();
     public DbSet<ReturnItem> ReturnItems => Set<ReturnItem>();
 
@@ -505,5 +507,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options, ITenant
             b.Property(x => x.Amount).HasPrecision(18, 4);
             b.HasQueryFilter(x => x.TenantId == TenantId);
         });
+
+        modelBuilder.Entity<Country>().HasMany(x => x.Governorates).WithOne(x => x.Country);
+        modelBuilder.Entity<Governorate>().HasOne(x => x.Country).WithMany(x => x.Governorates);
     }
 }

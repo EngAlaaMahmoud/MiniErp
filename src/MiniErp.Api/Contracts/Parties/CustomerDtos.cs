@@ -7,8 +7,12 @@ public sealed record CustomerListItem(
     string Name,
     string? Phone,
     string? TaxRegistrationNo,
-    string? Country,
-    string? Governorate,
+    Guid? CustomerTypeId,
+    string? CustomerTypeName,
+    Guid? CountryId,
+    string? CountryName,
+    Guid? GovernorateId,
+    string? GovernorateName,
     string? City,
     string? BuildingNo,
     string? Floor,
@@ -25,8 +29,13 @@ public sealed class CreateCustomerRequest
 
     public string? Phone { get; set; }
     public string? TaxRegistrationNo { get; set; }
-    public string? Country { get; set; }
-    public string? Governorate { get; set; }
+    public Guid? CustomerTypeId { get; set; }
+    public Guid? CountryId { get; set; }
+    public Guid? GovernorateId { get; set; }
+
+    // allow sending free-text governorate for non-Egypt countries
+    public string? GovernorateText { get; set; }
+
     public string? City { get; set; }
     public string? BuildingNo { get; set; }
     public string? Floor { get; set; }
@@ -44,8 +53,13 @@ public sealed class UpdateCustomerRequest
 
     public string? Phone { get; set; }
     public string? TaxRegistrationNo { get; set; }
-    public string? Country { get; set; }
-    public string? Governorate { get; set; }
+    public Guid? CustomerTypeId { get; set; }
+    public Guid? CountryId { get; set; }
+    public Guid? GovernorateId { get; set; }
+
+    // allow free-text governorate
+    public string? GovernorateText { get; set; }
+
     public string? City { get; set; }
     public string? BuildingNo { get; set; }
     public string? Floor { get; set; }
@@ -55,3 +69,9 @@ public sealed class UpdateCustomerRequest
     public string? Address { get; set; }
     public bool IsActive { get; set; }
 }
+
+public sealed record CountryOption(Guid Id, string Name, string NameAr);
+
+public sealed record GovernorateOption(Guid Id, Guid CountryId, string Name, string NameAr);
+
+public sealed record CustomerTypeOption(Guid Id, string Name, string NameAr);

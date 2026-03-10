@@ -243,6 +243,7 @@ public sealed class PosController(AppDbContext db, IdempotencyService idempotenc
                     customerId = customer.Id;
                     customerName = customer.Name;
                     customerTaxRegistrationNo = customer.TaxRegistrationNo;
+                    // customer.Country and customer.Governorate are navigation objects now; pass their name strings
                     customerAddress = BuildPartyAddress(
                         customer.Country,
                         customer.Governorate,
