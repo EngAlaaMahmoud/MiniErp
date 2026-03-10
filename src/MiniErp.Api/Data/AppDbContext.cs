@@ -162,6 +162,11 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options, ITenant
             b.HasKey(x => x.Id);
             b.HasIndex(x => new { x.TenantId, x.Name }).IsUnique();
             b.Property(x => x.Name).HasMaxLength(200).IsRequired();
+            b.Property(x => x.Address).HasMaxLength(500);
+            b.Property(x => x.Fax).HasMaxLength(50);
+            b.Property(x => x.Email).HasMaxLength(200);
+            b.Property(x => x.Phone).HasMaxLength(50);
+            b.Property(x => x.Mobile).HasMaxLength(50);
             b.Property(x => x.CreatedAt).IsRequired();
             b.HasQueryFilter(x => x.TenantId == TenantId);
         });
@@ -172,6 +177,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options, ITenant
             b.HasKey(x => x.Id);
             b.HasIndex(x => new { x.TenantId, x.Name }).IsUnique();
             b.Property(x => x.Name).HasMaxLength(50).IsRequired();
+            b.Property(x => x.Capacity).HasPrecision(18, 6);
             b.Property(x => x.CreatedAt).IsRequired();
             b.HasQueryFilter(x => x.TenantId == TenantId);
         });

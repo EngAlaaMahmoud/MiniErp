@@ -95,14 +95,16 @@ public sealed class DevSeeder(IServiceProvider serviceProvider, ILogger<DevSeede
         var hasAnyUnitMeasures = await db.UnitMeasures.IgnoreQueryFilters().AnyAsync(x => x.TenantId == tenantId, cancellationToken);
         if (!hasAnyUnitMeasures)
         {
-            db.UnitMeasures.Add(new UnitMeasure
-            {
-                Id = Guid.NewGuid(),
-                TenantId = tenantId,
-                Name = "Unit",
-                IsActive = true,
-                CreatedAt = DateTimeOffset.UtcNow
-            });
+            var now = DateTimeOffset.UtcNow;
+            db.UnitMeasures.AddRange(
+                new UnitMeasure { Id = Guid.NewGuid(), TenantId = tenantId, Name = "Unit", Capacity = 1m, IsActive = true, CreatedAt = now },
+                new UnitMeasure { Id = Guid.NewGuid(), TenantId = tenantId, Name = "Box", Capacity = 1m, IsActive = true, CreatedAt = now },
+                new UnitMeasure { Id = Guid.NewGuid(), TenantId = tenantId, Name = "Pack", Capacity = 1m, IsActive = true, CreatedAt = now },
+                new UnitMeasure { Id = Guid.NewGuid(), TenantId = tenantId, Name = "Dozen", Capacity = 12m, IsActive = true, CreatedAt = now },
+                new UnitMeasure { Id = Guid.NewGuid(), TenantId = tenantId, Name = "Kg", Capacity = 1m, IsActive = true, CreatedAt = now },
+                new UnitMeasure { Id = Guid.NewGuid(), TenantId = tenantId, Name = "g", Capacity = 0.001m, IsActive = true, CreatedAt = now },
+                new UnitMeasure { Id = Guid.NewGuid(), TenantId = tenantId, Name = "L", Capacity = 1m, IsActive = true, CreatedAt = now },
+                new UnitMeasure { Id = Guid.NewGuid(), TenantId = tenantId, Name = "ml", Capacity = 0.001m, IsActive = true, CreatedAt = now });
         }
 
         var vat14Exists = await db.TaxRates.IgnoreQueryFilters().AnyAsync(x => x.TenantId == tenantId && x.Id == vat14Id, cancellationToken);
@@ -219,35 +221,108 @@ public sealed class DevSeeder(IServiceProvider serviceProvider, ILogger<DevSeede
             }
         }
 
-        var hasAnyTaxes = await db.SalesTaxTypes.IgnoreQueryFilters().AnyAsync(x => x.TenantId == tenantId, cancellationToken);
-        if (!hasAnyTaxes)
+        var seedTaxTypes = new (Guid? Id, string MainCode, string SubCode, string TaxType, string Description)[]
         {
+            (null, "T_1", "V001", "VAT", "تصدير للخارج"),
+            (null, "T_1", "V002", "VAT", "تصدير لمناطق حرة وأخرى"),
+            (null, "T_1", "V003", "VAT", "سلعة أو خدمة معفاة"),
+            (null, "T_1", "V004", "VAT", "سلعة أو خدمة غير خاضعة"),
+            (null, "T_1", "V005", "VAT", "بيان"),
+            (null, "T_1", "V006", "VAT", "إعفاءات دفاع وأمن قومي"),
+            (null, "T_1", "V007", "VAT", "إعفاءات اتفاقيات"),
+            (null, "T_1", "V008", "VAT", "إعفاءات أخرى"),
+            (salesTaxTypeId, "T_1", "V009", "VAT", "سلع عامة"),
+            (null, "T_1", "V010", "VAT", "سلع أخرى"),
+
+            (null, "T_2", "Tb101", "ضريبة جدول", "ضريبة الجدول - نسبة"),
+            (null, "T_3", "Tb102", "ضريبة جدول", "ضريبة الجدول - نوعية"),
+
+            (null, "T_4", "W001", "الخصم تحت حساب ضريبة", "المقاولات"),
+            (null, "T_4", "W002", "الخصم تحت حساب ضريبة", "التوريدات"),
+            (null, "T_4", "W003", "الخصم تحت حساب ضريبة", "المشتريات"),
+            (null, "T_4", "W004", "الخصم تحت حساب ضريبة", "الخدمات"),
+            (null, "T_4", "W005", "الخصم تحت حساب ضريبة", "الجمعيات التعاونية للنقل"),
+            (null, "T_4", "W006", "الخصم تحت حساب ضريبة", "العمولات والسمسرة"),
+            (null, "T_4", "W007", "الخصم تحت حساب ضريبة", "شركات الدخل والائتمان"),
+            (null, "T_4", "W008", "الخصم تحت حساب ضريبة", "شركات البترول والاتصالات"),
+            (null, "T_4", "W009", "الخصم تحت حساب ضريبة", "المدفوعات"),
+            (null, "T_4", "W010", "الخصم تحت حساب ضريبة", "أتعاب مهنية"),
+            (null, "T_4", "W011", "الخصم تحت حساب ضريبة", "عمولة وسمسرة"),
+            (null, "T_4", "W012", "الخصم تحت حساب ضريبة", "تحصيل المستشفيات من الأطباء"),
+            (null, "T_4", "W013", "الخصم تحت حساب ضريبة", "إتاوات"),
+            (null, "T_4", "W014", "الخصم تحت حساب ضريبة", "تخليص جمركي"),
+            (null, "T_4", "W015", "الخصم تحت حساب ضريبة", "إلغاء"),
+            (null, "T_4", "W016", "الخصم تحت حساب ضريبة", "دفعات مقدمة"),
+
+            (null, "T_5", "ST01", "ضريبة الدمغة", "ضريبة الدمغة - نسبية"),
+            (null, "T_6", "ST02", "ضريبة الدمغة", "ضريبة الدمغة - قطعية"),
+
+            (null, "T_7", "Ent01", "ضريبة الملاهي", "ضريبة الملاهي - نسبية"),
+            (null, "T_7", "Ent02", "ضريبة الملاهي", "ضريبة الملاهي - قطعية"),
+
+            (null, "T_8", "RD01", "رسم تنمية الموارد", "رسم تنمية الموارد - نسبية"),
+            (null, "T_8", "RD02", "رسم تنمية الموارد", "رسم تنمية الموارد - قطعية"),
+
+            (null, "T_9", "RD01", "رسم خدمة", "رسم خدمة - نسبية"),
+            (null, "T_9", "RD02", "رسم خدمة", "رسم خدمة - قطعية"),
+
+            (null, "T_10", "Mn01", "رسم المحليات", "رسم المحليات - نسبية"),
+            (null, "T_10", "Mn02", "رسم المحليات", "رسم المحليات - قطعية"),
+
+            (null, "T_11", "MI01", "رسم التأمين الصحي", "رسم التأمين الصحي - نسبية"),
+            (null, "T_11", "MI02", "رسم التأمين الصحي", "رسم التأمين الصحي - قطعية"),
+
+            (null, "T_12", "OF01", "رسوم أخرى", "رسوم أخرى - نسبية"),
+            (null, "T_12", "OF02", "رسوم أخرى", "رسوم أخرى - قطعية"),
+
+            (null, "T_13", "ST03", "ضريبة الدمغة", "ضريبة الدمغة نسبية (غير ضريبي)"),
+            (null, "T_14", "ST04", "ضريبة الدمغة", "ضريبة الدمغة قطعية (غير ضريبي)"),
+
+            (null, "T_15", "Ent03", "ضريبة الملاهي", "ضريبة الملاهي - نسبية"),
+            (null, "T_15", "Ent04", "ضريبة الملاهي", "ضريبة الملاهي - قطعية"),
+
+            (null, "T_16", "RD03", "رسم تنمية الموارد", "رسم تنمية الموارد - نسبية"),
+            (null, "T_16", "RD04", "رسم تنمية الموارد", "رسم تنمية الموارد - قطعية"),
+
+            (null, "T_17", "SC03", "رسم خدمة", "رسم خدمة - نسبية"),
+            (null, "T_17", "SC04", "رسم خدمة", "رسم خدمة - قطعية"),
+
+            (null, "T_18", "Mn03", "رسم المحليات", "رسم المحليات - نسبية"),
+            (null, "T_18", "Mn04", "رسم المحليات", "رسم المحليات - قطعية"),
+
+            (null, "T_19", "MI03", "رسم التأمين الصحي", "رسم التأمين الصحي - نسبية"),
+            (null, "T_19", "MI04", "رسم التأمين الصحي", "رسم التأمين الصحي - قطعية"),
+
+            (null, "T_20", "OF03", "رسوم أخرى", "رسوم أخرى - نسبية"),
+            (null, "T_20", "OF04", "رسوم أخرى", "رسوم أخرى - قطعية")
+        };
+
+        var existingTaxKeys = await db.SalesTaxTypes.IgnoreQueryFilters()
+            .Where(x => x.TenantId == tenantId)
+            .Select(x => new { x.MainCode, x.SubCode })
+            .ToListAsync(cancellationToken);
+
+        var existingTaxKeySet = new HashSet<string>(existingTaxKeys.Select(x => x.MainCode.Trim().ToUpperInvariant() + "|" + x.SubCode.Trim().ToUpperInvariant()));
+        foreach (var t in seedTaxTypes)
+        {
+            var key = t.MainCode.Trim().ToUpperInvariant() + "|" + t.SubCode.Trim().ToUpperInvariant();
+            if (existingTaxKeySet.Contains(key))
+            {
+                continue;
+            }
+
             db.SalesTaxTypes.Add(new SalesTaxType
             {
-                Id = Guid.Parse("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"),
+                Id = t.Id ?? Guid.NewGuid(),
                 TenantId = tenantId,
-                MainCode = "T_1",
-                SubCode = "V009",
-                TaxType = "VAT",
-                Description = "سلع عامة",
+                MainCode = t.MainCode.Trim(),
+                SubCode = t.SubCode.Trim(),
+                TaxType = t.TaxType.Trim(),
+                Description = t.Description.Trim(),
                 Percent = 0m,
                 IsActive = true,
                 CreatedAt = DateTimeOffset.UtcNow
             });
-
-            db.SalesTaxTypes.AddRange(
-                new SalesTaxType
-                {
-                    Id = Guid.NewGuid(),
-                    TenantId = tenantId,
-                    MainCode = "T_4",
-                    SubCode = "W013",
-                    TaxType = "WHT",
-                    Description = "إتاوات",
-                    Percent = 0m,
-                    IsActive = true,
-                    CreatedAt = DateTimeOffset.UtcNow
-                });
         }
 
         var hasAnySuppliers = await db.Suppliers.IgnoreQueryFilters().AnyAsync(x => x.TenantId == tenantId, cancellationToken);

@@ -139,6 +139,33 @@ public sealed class TaxesController(AppDbContext db) : ControllerBase
         return NoContent();
     }
 
+    [HttpDelete("types/{id:guid}")]
+    [RequirePermission(PermissionKeys.TaxesManage)]
+    public async Task<IActionResult> DeleteTaxType([FromRoute] Guid id, CancellationToken ct)
+    {
+        if (id == Guid.Empty)
+        {
+            return BadRequest(new { error = "INVALID_ID" });
+        }
+
+        var entity = await db.SalesTaxTypes.SingleOrDefaultAsync(x => x.Id == id, ct);
+        if (entity is null)
+        {
+            return NotFound(new { error = "NOT_FOUND" });
+        }
+
+        var inProducts = await db.Products.AnyAsync(x => x.SalesTaxTypeId == id, ct);
+        var inProductTaxes = await db.ProductTaxes.AnyAsync(x => x.SalesTaxTypeId == id, ct);
+        if (inProducts || inProductTaxes)
+        {
+            return BadRequest(new { error = "IN_USE" });
+        }
+
+        db.SalesTaxTypes.Remove(entity);
+        await db.SaveChangesAsync(ct);
+        return NoContent();
+    }
+
     [HttpGet("rates")]
     [RequirePermission(PermissionKeys.TaxesView)]
     public async Task<ActionResult<IReadOnlyList<TaxRateListItem>>> GetTaxRates([FromQuery] string? search, CancellationToken ct)
@@ -245,6 +272,32 @@ public sealed class TaxesController(AppDbContext db) : ControllerBase
             return Conflict(new { error = "DUPLICATE_NAME" });
         }
 
+        return NoContent();
+    }
+
+    [HttpDelete("rates/{id:guid}")]
+    [RequirePermission(PermissionKeys.TaxesManage)]
+    public async Task<IActionResult> DeleteTaxRate([FromRoute] Guid id, CancellationToken ct)
+    {
+        if (id == Guid.Empty)
+        {
+            return BadRequest(new { error = "INVALID_ID" });
+        }
+
+        var entity = await db.TaxRates.SingleOrDefaultAsync(x => x.Id == id, ct);
+        if (entity is null)
+        {
+            return NotFound(new { error = "NOT_FOUND" });
+        }
+
+        var inProducts = await db.Products.AnyAsync(x => x.TaxRateId == id, ct);
+        if (inProducts)
+        {
+            return BadRequest(new { error = "IN_USE" });
+        }
+
+        db.TaxRates.Remove(entity);
+        await db.SaveChangesAsync(ct);
         return NoContent();
     }
 

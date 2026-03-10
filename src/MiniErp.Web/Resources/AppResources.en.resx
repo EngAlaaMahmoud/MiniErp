@@ -47,6 +47,7 @@
   <data name="Common.Refresh" xml:space="preserve"><value>Refresh</value></data>
   <data name="Common.Save" xml:space="preserve"><value>Save</value></data>
   <data name="Common.Delete" xml:space="preserve"><value>Delete</value></data>
+  <data name="Common.ConfirmDelete" xml:space="preserve"><value>Are you sure you want to delete?</value></data>
   <data name="Common.Edit" xml:space="preserve"><value>Edit</value></data>
   <data name="Common.Cancel" xml:space="preserve"><value>Cancel</value></data>
   <data name="Common.Active" xml:space="preserve"><value>Active</value></data>

@@ -3,6 +3,7 @@
 @inject ApiSession Session
 @inject ApiClient Api
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 @using System.ComponentModel.DataAnnotations
 
 <PageTitle>@L["Nav.UnitMeasures"]</PageTitle>
@@ -38,6 +39,7 @@
                                 <thead>
                                     <tr>
                                         <th>@L["Common.Name"]</th>
+                                        <th class="text-end">السعة</th>
                                         <th>@L["Common.Active"]</th>
                                         <th></th>
                                     </tr>
@@ -47,6 +49,7 @@
                                     {
                                         <tr>
                                             <td>@u.Name</td>
+                                            <td class="text-end">@u.Capacity</td>
                                             <td>@(u.IsActive ? L["Common.Yes"] : L["Common.No"])</td>
                                             <td class="text-end">
                                                 <button class="btn btn-sm btn-outline-secondary" @onclick="() => SelectForEdit(u)">@L["Common.Edit"]</button>
@@ -79,12 +82,22 @@
                                 <label class="form-label">@L["Common.Name"]</label>
                                 <InputText class="form-control" @bind-Value="_form.Name" />
                             </div>
+                            <div class="mb-2">
+                                <label class="form-label">السعة</label>
+                                <InputNumber class="form-control" @bind-Value="_form.Capacity" />
+                            </div>
                             <div class="form-check mb-3">
                                 <InputCheckbox class="form-check-input" @bind-Value="_form.IsActive" />
                                 <label class="form-check-label">@L["Common.Active"]</label>
                             </div>
 
-                            <button class="btn btn-primary w-100" disabled="@_busy">@L["Common.Save"]</button>
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-primary flex-fill" disabled="@_busy">@L["Common.Save"]</button>
+                                @if (_form.Id is not null)
+                                {
+                                    <button type="button" class="btn btn-danger" @onclick="Delete" disabled="@_busy">@L["Common.Delete"]</button>
+                                }
+                            </div>
                         </EditForm>
                     </div>
                 </div>
@@ -153,6 +166,7 @@
         {
             Id = item.Id,
             Name = item.Name,
+            Capacity = item.Capacity,
             IsActive = item.IsActive
         };
     }
@@ -175,6 +189,7 @@
                 response = await Api.PostAsync("catalog/unit-measures", new
                 {
                     name = _form.Name,
+                    capacity = _form.Capacity,
                     isActive = _form.IsActive
                 });
             }
@@ -183,6 +198,7 @@
                 response = await Api.PutAsync($"catalog/unit-measures/{_form.Id}", new
                 {
                     name = _form.Name,
+                    capacity = _form.Capacity,
                     isActive = _form.IsActive
                 });
             }
@@ -202,10 +218,44 @@
         }
     }
 
+    private async Task Delete()
+    {
+        if (_form.Id is null)
+        {
+            return;
+        }
+
+        var ok = await JS.InvokeAsync<bool>("confirm", L["Common.ConfirmDelete"].Value);
+        if (!ok)
+        {
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            var response = await Api.DeleteAsync($"catalog/unit-measures/{_form.Id}");
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = await response.Content.ReadAsStringAsync();
+                return;
+            }
+
+            ClearForm();
+            await Load();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
     private sealed class UnitMeasureItem
     {
         public Guid Id { get; set; }
         public string Name { get; set; } = "";
+        public decimal Capacity { get; set; }
         public bool IsActive { get; set; }
     }
 
@@ -213,6 +263,7 @@
     {
         public Guid? Id { get; set; }
         [Required] public string Name { get; set; } = "";
+        [Range(typeof(decimal), "0.000001", "999999999999")] public decimal Capacity { get; set; } = 1m;
         public bool IsActive { get; set; }
     }
 
