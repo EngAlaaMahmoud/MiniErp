@@ -217,6 +217,7 @@ public sealed class DevSeeder(IServiceProvider serviceProvider, ILogger<DevSeede
                 SubCode = "V009",
                 TaxType = "VAT",
                 Description = "سلع عامة",
+                Percent = 0m,
                 IsActive = true,
                 CreatedAt = DateTimeOffset.UtcNow
             });
@@ -230,6 +231,7 @@ public sealed class DevSeeder(IServiceProvider serviceProvider, ILogger<DevSeede
                     SubCode = "W013",
                     TaxType = "WHT",
                     Description = "إتاوات",
+                    Percent = 0m,
                     IsActive = true,
                     CreatedAt = DateTimeOffset.UtcNow
                 });

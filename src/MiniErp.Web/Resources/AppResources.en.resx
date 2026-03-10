@@ -280,6 +280,18 @@
   <data name="Products.SelectToEdit" xml:space="preserve"><value>Select a product to edit</value></data>
   <data name="Products.InternalCode" xml:space="preserve"><value>Internal code</value></data>
   <data name="Products.PrimaryBarcode" xml:space="preserve"><value>Primary barcode</value></data>
+  <data name="Products.Section.MainInfo" xml:space="preserve"><value>Main info</value></data>
+  <data name="Products.Section.Taxes" xml:space="preserve"><value>Taxes</value></data>
+  <data name="Products.Section.Barcodes" xml:space="preserve"><value>Barcodes</value></data>
+  <data name="Products.Section.Units" xml:space="preserve"><value>Units</value></data>
+  <data name="Products.Field.Number" xml:space="preserve"><value>Number</value></data>
+  <data name="Products.Units.AddUnit" xml:space="preserve"><value>Add unit</value></data>
+  <data name="Products.Units.EditUnit" xml:space="preserve"><value>Edit unit</value></data>
+  <data name="Products.Units.Factor" xml:space="preserve"><value>Factor</value></data>
+  <data name="Products.Units.Default" xml:space="preserve"><value>Default</value></data>
+  <data name="Products.Taxes.TotalTaxes" xml:space="preserve"><value>Total taxes</value></data>
+  <data name="Products.Taxes.PriceAfterTaxes" xml:space="preserve"><value>Price after taxes</value></data>
+  <data name="Products.Taxes.EmptyHint" xml:space="preserve"><value>No additional taxes. Click "Add line".</value></data>
   <data name="Products.Field.CompanyName" xml:space="preserve"><value>Company name</value></data>
   <data name="Products.Field.ProductName" xml:space="preserve"><value>Product name</value></data>
   <data name="Products.Field.DescriptionModel" xml:space="preserve"><value>Description / Model</value></data>
@@ -314,6 +326,7 @@
   <data name="Taxes.Col.TaxType" xml:space="preserve"><value>Tax type</value></data>
   <data name="Taxes.Col.SubCode" xml:space="preserve"><value>Sub code</value></data>
   <data name="Taxes.Col.Description" xml:space="preserve"><value>Description</value></data>
+  <data name="Taxes.Col.Percent" xml:space="preserve"><value>Percent</value></data>
 
   <data name="Error.Unexpected" xml:space="preserve"><value>An unexpected error has occurred.</value></data>
   <data name="Error.Reload" xml:space="preserve"><value>Reload</value></data>

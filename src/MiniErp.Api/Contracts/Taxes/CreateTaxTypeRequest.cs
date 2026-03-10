@@ -16,6 +16,7 @@ public sealed class CreateTaxTypeRequest
     [Required]
     public string Description { get; set; } = "";
 
+    public decimal Percent { get; set; }
+
     public bool IsActive { get; set; } = true;
 }
-

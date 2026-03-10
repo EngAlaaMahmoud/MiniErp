@@ -9,8 +9,8 @@ public sealed class SalesTaxType : ITenantScoped
     public string SubCode { get; set; } = "";  // e.g. V001
     public string TaxType { get; set; } = "";  // e.g. VAT / Tbl / WHT
     public string Description { get; set; } = "";
+    public decimal Percent { get; set; }        // 0..1 (e.g. 0.14 = 14%)
 
     public bool IsActive { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
 }
-

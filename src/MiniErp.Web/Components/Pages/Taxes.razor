@@ -56,6 +56,7 @@
                                         <th>@L["Taxes.Col.TaxType"]</th>
                                         <th>@L["Taxes.Col.SubCode"]</th>
                                         <th>@L["Taxes.Col.Description"]</th>
+                                        <th class="text-end">@L["Taxes.Col.Percent"]</th>
                                         <th>@L["Common.Active"]</th>
                                     </tr>
                                 </thead>
@@ -67,6 +68,7 @@
                                             <td class="text-muted">@t.TaxType</td>
                                             <td><code>@t.SubCode</code></td>
                                             <td>@t.Description</td>
+                                            <td class="text-end">@((t.Percent * 100).ToString("0.######"))%</td>
                                             <td>@(t.IsActive ? L["Common.Yes"] : L["Common.No"])</td>
                                         </tr>
                                     }
@@ -104,6 +106,11 @@
                             <div class="mb-2">
                                 <label class="form-label">@L["Taxes.Col.Description"]</label>
                                 <InputText class="form-control" @bind-Value="_create.Description" />
+                            </div>
+
+                            <div class="mb-2">
+                                <label class="form-label">@L["Taxes.Col.Percent"] (0 - 100)</label>
+                                <InputNumber class="form-control" @bind-Value="_create.Percent" />
                             </div>
 
                             <div class="form-check mb-3">
@@ -359,12 +366,14 @@
         _error = null;
         try
         {
+            var percent = _create.Percent / 100m;
             var response = await Api.PostAsync("taxes/types", new
             {
                 mainCode = _create.MainCode,
                 subCode = _create.SubCode,
                 taxType = _create.TaxType,
                 description = _create.Description,
+                percent,
                 isActive = _create.IsActive
             });
 
@@ -374,7 +383,7 @@
                 return;
             }
 
-            _create = new CreateTaxTypeModel { IsActive = true, TaxType = _create.TaxType };
+            _create = new CreateTaxTypeModel { IsActive = true, TaxType = _create.TaxType, Percent = _create.Percent };
             await Load();
         }
         finally
@@ -491,6 +500,7 @@
         public string SubCode { get; set; } = "";
         public string TaxType { get; set; } = "";
         public string Description { get; set; } = "";
+        public decimal Percent { get; set; }
         public bool IsActive { get; set; }
     }
 
@@ -500,6 +510,7 @@
         [Required] public string SubCode { get; set; } = "";
         [Required] public string TaxType { get; set; } = "";
         [Required] public string Description { get; set; } = "";
+        public decimal Percent { get; set; }
         public bool IsActive { get; set; }
     }
 

@@ -280,6 +280,18 @@
   <data name="Products.SelectToEdit" xml:space="preserve"><value>اختر صنف للتعديل</value></data>
   <data name="Products.InternalCode" xml:space="preserve"><value>الكود الداخلي</value></data>
   <data name="Products.PrimaryBarcode" xml:space="preserve"><value>الباركود الأساسي</value></data>
+  <data name="Products.Section.MainInfo" xml:space="preserve"><value>البيانات الأساسية</value></data>
+  <data name="Products.Section.Taxes" xml:space="preserve"><value>الضرائب</value></data>
+  <data name="Products.Section.Barcodes" xml:space="preserve"><value>الباركود</value></data>
+  <data name="Products.Section.Units" xml:space="preserve"><value>الوحدات</value></data>
+  <data name="Products.Field.Number" xml:space="preserve"><value>رقم</value></data>
+  <data name="Products.Units.AddUnit" xml:space="preserve"><value>إضافة وحدة</value></data>
+  <data name="Products.Units.EditUnit" xml:space="preserve"><value>تعديل وحدة</value></data>
+  <data name="Products.Units.Factor" xml:space="preserve"><value>المعامل</value></data>
+  <data name="Products.Units.Default" xml:space="preserve"><value>افتراضي</value></data>
+  <data name="Products.Taxes.TotalTaxes" xml:space="preserve"><value>إجمالي الضرائب</value></data>
+  <data name="Products.Taxes.PriceAfterTaxes" xml:space="preserve"><value>السعر بعد الضرائب</value></data>
+  <data name="Products.Taxes.EmptyHint" xml:space="preserve"><value>لا توجد ضرائب إضافية. اضغط "إضافة سطر".</value></data>
   <data name="Products.Field.CompanyName" xml:space="preserve"><value>اسم الشركة</value></data>
   <data name="Products.Field.ProductName" xml:space="preserve"><value>اسم الصنف</value></data>
   <data name="Products.Field.DescriptionModel" xml:space="preserve"><value>الوصف/الموديل</value></data>
@@ -314,6 +326,7 @@
   <data name="Taxes.Col.TaxType" xml:space="preserve"><value>نوع الضريبة</value></data>
   <data name="Taxes.Col.SubCode" xml:space="preserve"><value>الكود الفرعي</value></data>
   <data name="Taxes.Col.Description" xml:space="preserve"><value>الوصف</value></data>
+  <data name="Taxes.Col.Percent" xml:space="preserve"><value>النسبة</value></data>
 
   <data name="Error.Unexpected" xml:space="preserve"><value>حدث خطأ غير متوقع.</value></data>
   <data name="Error.Reload" xml:space="preserve"><value>إعادة تحميل</value></data>

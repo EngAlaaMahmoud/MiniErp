@@ -516,6 +516,99 @@ public sealed class CatalogController(AppDbContext db) : ControllerBase
         return NoContent();
     }
 
+    [HttpGet("products/{productId:guid}/taxes")]
+    [RequirePermission(PermissionKeys.CatalogView)]
+    public async Task<ActionResult<IReadOnlyList<ProductTaxListItem>>> GetProductTaxes([FromRoute] Guid productId, CancellationToken ct)
+    {
+        var tenantId = db.TenantId;
+        if (tenantId == Guid.Empty)
+        {
+            return BadRequest(new { error = "TENANT_REQUIRED" });
+        }
+
+        if (productId == Guid.Empty)
+        {
+            return BadRequest(new { error = "INVALID_PRODUCT" });
+        }
+
+        var productExists = await db.Products.AnyAsync(x => x.Id == productId, ct);
+        if (!productExists)
+        {
+            return NotFound(new { error = "PRODUCT_NOT_FOUND" });
+        }
+
+        var items = await db.ProductTaxes
+            .Where(x => x.ProductId == productId)
+            .OrderBy(x => x.CreatedAt)
+            .Select(x => new ProductTaxListItem(x.Id, x.SalesTaxTypeId))
+            .ToListAsync(ct);
+
+        return Ok(items);
+    }
+
+    [HttpPut("products/{productId:guid}/taxes")]
+    [RequirePermission(PermissionKeys.CatalogEdit)]
+    public async Task<IActionResult> UpdateProductTaxes([FromRoute] Guid productId, [FromBody] UpdateProductTaxesRequest request, CancellationToken ct)
+    {
+        var tenantId = db.TenantId;
+        if (tenantId == Guid.Empty)
+        {
+            return BadRequest(new { error = "TENANT_REQUIRED" });
+        }
+
+        if (productId == Guid.Empty)
+        {
+            return BadRequest(new { error = "INVALID_PRODUCT" });
+        }
+
+        var productExists = await db.Products.AnyAsync(x => x.Id == productId, ct);
+        if (!productExists)
+        {
+            return NotFound(new { error = "PRODUCT_NOT_FOUND" });
+        }
+
+        var requestedIds = (request.SalesTaxTypeIds ?? Array.Empty<Guid>())
+            .Where(x => x != Guid.Empty)
+            .Distinct()
+            .ToArray();
+
+        if (requestedIds.Length > 0)
+        {
+            var okCount = await db.SalesTaxTypes.CountAsync(x => requestedIds.Contains(x.Id) && x.IsActive, ct);
+            if (okCount != requestedIds.Length)
+            {
+                return BadRequest(new { error = "INVALID_TAX_TYPE" });
+            }
+        }
+
+        var existing = await db.ProductTaxes
+            .Where(x => x.ProductId == productId)
+            .ToListAsync(ct);
+
+        var existingTypeIds = existing.Select(x => x.SalesTaxTypeId).ToHashSet();
+        var now = DateTimeOffset.UtcNow;
+
+        foreach (var toRemove in existing.Where(x => !requestedIds.Contains(x.SalesTaxTypeId)))
+        {
+            db.ProductTaxes.Remove(toRemove);
+        }
+
+        foreach (var toAdd in requestedIds.Where(x => !existingTypeIds.Contains(x)))
+        {
+            db.ProductTaxes.Add(new ProductTax
+            {
+                Id = Guid.NewGuid(),
+                TenantId = tenantId,
+                ProductId = productId,
+                SalesTaxTypeId = toAdd,
+                CreatedAt = now
+            });
+        }
+
+        await db.SaveChangesAsync(ct);
+        return NoContent();
+    }
+
     [HttpPost("products/{productId:guid}/barcodes")]
     [RequirePermission(PermissionKeys.CatalogEdit)]
     public async Task<IActionResult> AddBarcode([FromRoute] Guid productId, [FromBody] AddBarcodeRequest request, CancellationToken ct)

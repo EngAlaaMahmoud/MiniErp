@@ -3,8 +3,10 @@
 @inject ApiSession Session
 @inject ApiClient Api
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 @using System.ComponentModel.DataAnnotations
 @using System.Net.Http.Json
+@implements IAsyncDisposable
 
 <PageTitle>@L["Nav.Products"]</PageTitle>
 
@@ -21,6 +23,7 @@
     }
     else
     {
+        @* Legacy two-column layout (reference)
         <div class="row g-3">
             <div class="col-lg-7">
                 <div class="card">
@@ -378,10 +381,642 @@
                 </div>
             </div>
         </div>
+        *@
+
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex gap-2 mb-2">
+                    <input class="form-control" placeholder="@L["Products.SearchPlaceholder"]" @bind="_search" @bind:event="oninput" />
+                    <button class="btn btn-outline-primary" @onclick="Load" disabled="@_busy">@L["Common.Refresh"]</button>
+                    <button class="btn btn-primary" @onclick="OpenCreateModal" disabled="@_busy">@L["Common.Add"]</button>
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(_error))
+                {
+                    <div class="alert alert-danger">@_error</div>
+                }
+
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped align-middle">
+                        <thead>
+                            <tr>
+                                <th class="text-end">@L["Products.Col.Vat"]</th>
+                                <th class="text-end">@L["Products.Col.TableTax"]</th>
+                                <th class="text-end">@L["Products.Col.ServiceFee"]</th>
+                                <th class="text-end">@L["Products.Col.AdditionalTaxes"]</th>
+                                <th class="text-end">@L["Products.Col.AdditionalFees"]</th>
+                                <th class="text-end">@L["Products.Col.PriceAfterDiscount"]</th>
+                                <th class="text-end">@L["Products.Col.Discount"]</th>
+                                <th class="text-end">@L["Products.Col.UnitPrice"]</th>
+                                <th>@L["Products.Col.ProductName"]</th>
+                                <th>@L["Products.Col.DescriptionModel"]</th>
+                                <th>@L["Products.Col.CompanyName"]</th>
+                                <th>@L["Products.Col.ProductGroup"]</th>
+                                <th>@L["Products.Col.InternalCode"]</th>
+                                <th>@L["Products.Col.EgsCode"]</th>
+                                <th>@L["Common.Active"]</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var p in _products)
+                            {
+                                <tr>
+                                    <td class="text-end">@LookupName(_taxRateNameById, p.TaxRateId)</td>
+                                    <td class="text-end text-muted">0</td>
+                                    <td class="text-end text-muted">0</td>
+                                    <td class="text-end text-muted">0</td>
+                                    <td class="text-end text-muted">0</td>
+                                    <td class="text-end">@decimal.Round(p.Price - p.DefaultDiscount, 3)</td>
+                                    <td class="text-end">@p.DefaultDiscount</td>
+                                    <td class="text-end">@p.Price</td>
+                                    <td>@p.Name</td>
+                                    <td class="text-muted">@p.Description</td>
+                                    <td class="text-muted">@p.BrandName</td>
+                                    <td>@LookupName(_categoryNameById, p.CategoryId)</td>
+                                    <td class="text-muted">@p.Sku</td>
+                                    <td class="text-muted">@p.PrimaryBarcode</td>
+                                    <td>@(p.IsActive ? L["Common.Yes"] : L["Common.No"])</td>
+                                    <td class="text-end">
+                                        <button class="btn btn-sm btn-outline-secondary" @onclick="async () => await OpenEditModal(p)">@L["Common.Edit"]</button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        @if (_modalMode != ProductModalMode.None)
+        {
+            <div class="modal-backdrop fade show"></div>
+            <div class="modal fade show" tabindex="-1" role="dialog" aria-modal="true" style="display:block;" data-bs-focus="false" data-bs-backdrop="static">
+                <div class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable">
+                    <div class="modal-content">
+                        @if (_modalMode == ProductModalMode.Create)
+                        {
+                            <EditForm Model="_create" OnValidSubmit="Create" class="d-flex flex-column" style="min-height:0;">
+                                <DataAnnotationsValidator />
+                                <div class="modal-header">
+                                    <h5 class="modal-title">@L["Products.AddTitle"]</h5>
+                                    <button type="button" class="btn-close" aria-label="Close" @onclick="CloseModal"></button>
+                                </div>
+                                <div class="modal-body overflow-auto" style="min-height:0;">
+                                    @if (!string.IsNullOrWhiteSpace(_error))
+                                    {
+                                        <div class="alert alert-danger">@_error</div>
+                                    }
+
+                                    <div class="card mb-3">
+                                        <div class="card-header">
+                                            <h5 class="m-0">@L["Products.Section.MainInfo"]</h5>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="row g-2 mb-2">
+                                                <div class="col-md-6">
+                                                    <label class="form-label">@L["Products.Field.ProductName"]</label>
+                                                    <InputText class="form-control" @bind-Value="_create.Name" />
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label class="form-label">@L["Products.Field.Number"]</label>
+                                                    <input class="form-control" value="-" readonly />
+                                                </div>
+                                            </div>
+
+                                            <div class="row g-2 mb-2">
+                                                <div class="col-md-6">
+                                                    <label class="form-label">@L["Products.Field.EgsCode"]</label>
+                                                    <InputText class="form-control" placeholder="@L["Products.PrimaryBarcode"]" @bind-Value="_create.PrimaryBarcode" />
+                                                </div>
+                                            </div>
+
+                                            <div class="row g-2 mb-3">
+                                                <div class="col-md-4">
+                                                    <label class="form-label">@L["Products.Field.InternalCode"]</label>
+                                                    <InputText class="form-control" @bind-Value="_create.Sku" />
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <label class="form-label">@L["Products.Field.CompanyName"]</label>
+                                                    <InputText class="form-control" @bind-Value="_create.BrandName" />
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <label class="form-label">@L["Products.Field.ProductGroup"]</label>
+                                                    <InputSelect class="form-select" @bind-Value="_create.CategoryId">
+                                                        <option value="">-</option>
+                                                        @foreach (var c in _categories)
+                                                        {
+                                                            <option value="@c.Id">@c.Name</option>
+                                                        }
+                                                    </InputSelect>
+                                                </div>
+                                            </div>
+
+                                            <div class="row g-2 mb-3">
+                                                <div class="col-md-4">
+                                                    <label class="form-label">@L["Products.Field.DescriptionModel"]</label>
+                                                    <InputTextArea class="form-control" rows="3" @bind-Value="_create.Description" />
+                                                </div>
+                                                <div class="col-md-8">
+                                                    <div class="row g-2 align-items-end">
+                                                        <div class="col-4">
+                                                            <label class="form-label">@L["Products.Field.UnitPrice"]</label>
+                                                            <InputNumber class="form-control form-control-sm" @bind-Value="_create.Price" />
+                                                        </div>
+                                                        <div class="col-4">
+                                                            <label class="form-label">@L["Products.Field.Discount"]</label>
+                                                            <InputNumber class="form-control form-control-sm" @bind-Value="_create.DefaultDiscount" />
+                                                        </div>
+                                                        <div class="col-4">
+                                                            <label class="form-label">@L["Products.Field.PriceAfterDiscount"]</label>
+                                                            <input class="form-control form-control-sm text-end" value="@decimal.Round(_create.Price - _create.DefaultDiscount, 3)" readonly />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div class="row g-2 mb-2">
+                                                <div class="col-md-6">
+                                                    <label class="form-label">@L["Products.Field.UnitMeasure"]</label>
+                                                    <InputText class="form-control" @bind-Value="_create.DefaultUnitName" />
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label class="form-label">@L["Products.Field.ReorderLevel"]</label>
+                                                    <InputNumber class="form-control" @bind-Value="_create.ReorderLevel" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="card mb-3">
+                                        <div class="card-header d-flex justify-content-between align-items-center">
+                                            <h5 class="m-0">@L["Products.Section.Taxes"]</h5>
+                                            <button type="button" class="btn btn-sm btn-outline-primary" @onclick="() => AddTaxRow(_create)" disabled="@_busy">@L["Common.AddLine"]</button>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="row g-2">
+                                                <div class="col-12">
+                                                    <label class="form-label">@L["Products.Field.VatRate"]</label>
+                                                    <InputSelect class="form-select" @bind-Value="_create.TaxRateId">
+                                                        <option value="">-</option>
+                                                        @foreach (var r in _taxRates)
+                                                        {
+                                                            <option value="@r.Id">@r.Name (@(r.Percent * 100)%)</option>
+                                                        }
+                                                    </InputSelect>
+                                                </div>
+                                            </div>
+
+                                            @if (_create.Taxes.Count > 0)
+                                            {
+                                                <div class="table-responsive mt-3">
+                                                    <table class="table table-bordered table-sm align-middle">
+                                                        <thead>
+                                                            <tr>
+                                                                <th>@L["Taxes.Col.MainCode"]</th>
+                                                                <th>@L["Taxes.Col.SubCode"]</th>
+                                                                <th>@L["Taxes.Col.TaxType"]</th>
+                                                                <th class="text-end">@L["Taxes.Col.Percent"]</th>
+                                                                <th class="text-end">@L["Products.Col.AdditionalTaxes"]</th>
+                                                                <th></th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            @for (var i = 0; i < _create.Taxes.Count; i++)
+                                                            {
+                                                                var row = _create.Taxes[i];
+                                                                var taxType = LookupTaxType(row);
+                                                                <tr>
+                                                                    <td style="min-width:140px">
+                                                                        <select class="form-select form-select-sm" value="@row.MainCode" @onchange="e => OnTaxMainCodeChanged(_create, row, e)">
+                                                                            <option value="">-</option>
+                                                                            @foreach (var main in GetUniqueMainCodes())
+                                                                            {
+                                                                                <option value="@main">@main</option>
+                                                                            }
+                                                                        </select>
+                                                                    </td>
+                                                                    <td style="min-width:220px">
+                                                                        <select class="form-select form-select-sm" value="@row.SubCode" disabled="@string.IsNullOrWhiteSpace(row.MainCode)" @onchange="e => OnTaxSubCodeChanged(_create, row, e)">
+                                                                            <option value="">-</option>
+                                                                            @foreach (var sub in GetSubCodesByMainCode(row.MainCode))
+                                                                            {
+                                                                                <option value="@sub.SubCode">@sub.SubCode - @sub.Description</option>
+                                                                            }
+                                                                        </select>
+                                                                    </td>
+                                                                    <td>
+                                                                        <input class="form-control form-control-sm" value="@(taxType?.TaxType ?? "-")" readonly />
+                                                                    </td>
+                                                                    <td class="text-end" style="min-width:110px">
+                                                                        <input class="form-control form-control-sm text-end" value="@(((taxType?.Percent ?? 0m) * 100).ToString(PercentFormat))%" readonly />
+                                                                    </td>
+                                                                    <td class="text-end" style="min-width:140px">
+                                                                        <input class="form-control form-control-sm text-end" value="@TaxValue(_create, row)" readonly />
+                                                                    </td>
+                                                                    <td class="text-end" style="width:1%">
+                                                                        <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => RemoveTaxRow(_create, i)" disabled="@_busy">×</button>
+                                                                    </td>
+                                                                </tr>
+                                                            }
+                                                        </tbody>
+                                                        <tfoot>
+                                                            <tr>
+                                                                <td colspan="3" class="text-end"><strong>@L["Products.Col.AdditionalTaxes"]</strong></td>
+                                                                <td class="text-end"><strong>@((AdditionalTaxesPercent(_create) * 100).ToString("0.######"))%</strong></td>
+                                                                <td class="text-end"><strong>@AdditionalTaxesValue(_create)</strong></td>
+                                                                <td></td>
+                                                            </tr>
+                                                            <tr>
+                                                                <td colspan="4" class="text-end"><strong>@L["Products.Col.Vat"] (@((VatPercent(_create) * 100).ToString("0.######"))%)</strong></td>
+                                                                <td class="text-end"><strong>@VatValue(_create)</strong></td>
+                                                                <td></td>
+                                                            </tr>
+                                                            <tr>
+                                                                <td colspan="4" class="text-end"><strong>@L["Products.Taxes.TotalTaxes"]</strong></td>
+                                                                <td class="text-end"><strong>@TotalTaxesValue(_create)</strong></td>
+                                                                <td></td>
+                                                            </tr>
+                                                            <tr>
+                                                                <td colspan="4" class="text-end"><strong>@L["Products.Taxes.PriceAfterTaxes"]</strong></td>
+                                                                <td class="text-end"><strong>@PriceAfterTaxes(_create)</strong></td>
+                                                                <td></td>
+                                                            </tr>
+                                                        </tfoot>
+                                                    </table>
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <div class="text-muted small mt-2">@L["Products.Taxes.EmptyHint"]</div>
+                                            }
+                                        </div>
+                                    </div>
+
+                                    <div class="row g-2 mb-2">
+                                        <div class="col-md-6">
+                                            <label class="form-label">@L["Products.Field.Cost"]</label>
+                                            <InputNumber class="form-control" @bind-Value="_create.Cost" />
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-check mt-4">
+                                                <InputCheckbox class="form-check-input" @bind-Value="_create.IsActive" />
+                                                <label class="form-check-label">@L["Common.Active"]</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-outline-secondary" @onclick="CloseModal" disabled="@_busy">@L["Common.Cancel"]</button>
+                                    <button type="submit" class="btn btn-primary" disabled="@_busy">@L["Common.Save"]</button>
+                                </div>
+                            </EditForm>
+                        }
+                        else if (_modalMode == ProductModalMode.Edit && _edit is not null)
+                        {
+                            <EditForm Model="_edit" OnValidSubmit="SaveEdit" class="d-flex flex-column" style="min-height:0;">
+                                <DataAnnotationsValidator />
+                                <div class="modal-header">
+                                    <h5 class="modal-title">@L["Products.EditTitle"]</h5>
+                                    <button type="button" class="btn-close" aria-label="Close" @onclick="CloseModal"></button>
+                                </div>
+                                <div class="modal-body overflow-auto" style="min-height:0;">
+                                    @if (!string.IsNullOrWhiteSpace(_error))
+                                    {
+                                        <div class="alert alert-danger">@_error</div>
+                                    }
+
+                                    <div class="card mb-3">
+                                        <div class="card-header">
+                                            <h5 class="m-0">@L["Products.Section.MainInfo"]</h5>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="row g-2 mb-2">
+                                                <div class="col-md-6">
+                                                    <label class="form-label">@L["Products.Field.ProductName"]</label>
+                                                    <InputText class="form-control" @bind-Value="_edit.Name" />
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label class="form-label">@L["Products.Field.Number"]</label>
+                                                    <input class="form-control" value="@_edit.Id" readonly />
+                                                </div>
+                                            </div>
+
+                                            <div class="row g-2 mb-2">
+                                                <div class="col-md-6">
+                                                    <label class="form-label">@L["Products.Field.EgsCode"]</label>
+                                                    <InputText class="form-control" @bind-Value="_edit.PrimaryBarcode" readonly />
+                                                </div>
+                                            </div>
+
+                                            <div class="row g-2 mb-3">
+                                                <div class="col-md-4">
+                                                    <label class="form-label">@L["Products.Field.InternalCode"]</label>
+                                                    <InputText class="form-control" @bind-Value="_edit.Sku" />
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <label class="form-label">@L["Products.Field.CompanyName"]</label>
+                                                    <InputText class="form-control" @bind-Value="_edit.BrandName" />
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <label class="form-label">@L["Products.Field.ProductGroup"]</label>
+                                                    <InputSelect class="form-select" @bind-Value="_edit.CategoryId">
+                                                        <option value="">-</option>
+                                                        @foreach (var c in _categories)
+                                                        {
+                                                            <option value="@c.Id">@c.Name</option>
+                                                        }
+                                                    </InputSelect>
+                                                </div>
+                                            </div>
+
+                                            <div class="row g-2 mb-3">
+                                                <div class="col-md-4">
+                                                    <label class="form-label">@L["Products.Field.DescriptionModel"]</label>
+                                                    <InputTextArea class="form-control" rows="3" @bind-Value="_edit.Description" />
+                                                </div>
+                                                <div class="col-md-8">
+                                                    <div class="row g-2 align-items-end">
+                                                        <div class="col-4">
+                                                            <label class="form-label">@L["Products.Field.UnitPrice"]</label>
+                                                            <InputNumber class="form-control form-control-sm" @bind-Value="_edit.Price" />
+                                                        </div>
+                                                        <div class="col-4">
+                                                            <label class="form-label">@L["Products.Field.Discount"]</label>
+                                                            <InputNumber class="form-control form-control-sm" @bind-Value="_edit.DefaultDiscount" />
+                                                        </div>
+                                                        <div class="col-4">
+                                                            <label class="form-label">@L["Products.Field.PriceAfterDiscount"]</label>
+                                                            <input class="form-control form-control-sm text-end" value="@decimal.Round(_edit.Price - _edit.DefaultDiscount, 3)" readonly />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div class="row g-2 mb-2">
+                                                <div class="col-md-6">
+                                                    <label class="form-label">@L["Products.Field.UnitMeasure"]</label>
+                                                    <InputText class="form-control" @bind-Value="_edit.DefaultUnitName" />
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label class="form-label">@L["Products.Field.ReorderLevel"]</label>
+                                                    <InputNumber class="form-control" @bind-Value="_edit.ReorderLevel" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="card mb-3">
+                                        <div class="card-header d-flex justify-content-between align-items-center">
+                                            <h5 class="m-0">@L["Products.Section.Taxes"]</h5>
+                                            <button type="button" class="btn btn-sm btn-outline-primary" @onclick="() => AddTaxRow(_edit)" disabled="@(_busy || _productTaxesBusy)">@L["Common.AddLine"]</button>
+                                        </div>
+                                        <div class="card-body">
+                                            @if (!string.IsNullOrWhiteSpace(_productTaxesError))
+                                            {
+                                                <div class="alert alert-danger">@_productTaxesError</div>
+                                            }
+
+                                            <div class="row g-2">
+                                                <div class="col-12">
+                                                    <label class="form-label">@L["Products.Field.VatRate"]</label>
+                                                    <InputSelect class="form-select" @bind-Value="_edit.TaxRateId">
+                                                        <option value="">-</option>
+                                                        @foreach (var r in _taxRates)
+                                                        {
+                                                            <option value="@r.Id">@r.Name (@(r.Percent * 100)%)</option>
+                                                        }
+                                                    </InputSelect>
+                                                </div>
+                                            </div>
+
+                                            @if (_productTaxesBusy)
+                                            {
+                                                <div class="text-muted mt-2">Loading...</div>
+                                            }
+                                            else if (_edit.Taxes.Count > 0)
+                                            {
+                                                <div class="table-responsive mt-3">
+                                                    <table class="table table-bordered table-sm align-middle">
+                                                        <thead>
+                                                            <tr>
+                                                                <th>@L["Taxes.Col.MainCode"]</th>
+                                                                <th>@L["Taxes.Col.SubCode"]</th>
+                                                                <th>@L["Taxes.Col.TaxType"]</th>
+                                                                <th class="text-end">@L["Taxes.Col.Percent"]</th>
+                                                                <th class="text-end">@L["Products.Col.AdditionalTaxes"]</th>
+                                                                <th></th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            @for (var i = 0; i < _edit.Taxes.Count; i++)
+                                                            {
+                                                                var row = _edit.Taxes[i];
+                                                                var taxType = LookupTaxType(row);
+                                                                <tr>
+                                                                    <td style="min-width:140px">
+                                                                        <select class="form-select form-select-sm" value="@row.MainCode" @onchange="e => OnTaxMainCodeChanged(_edit, row, e)">
+                                                                            <option value="">-</option>
+                                                                            @foreach (var main in GetUniqueMainCodes())
+                                                                            {
+                                                                                <option value="@main">@main</option>
+                                                                            }
+                                                                        </select>
+                                                                    </td>
+                                                                    <td style="min-width:220px">
+                                                                        <select class="form-select form-select-sm" value="@row.SubCode" disabled="@string.IsNullOrWhiteSpace(row.MainCode)" @onchange="e => OnTaxSubCodeChanged(_edit, row, e)">
+                                                                            <option value="">-</option>
+                                                                            @foreach (var sub in GetSubCodesByMainCode(row.MainCode))
+                                                                            {
+                                                                                <option value="@sub.SubCode">@sub.SubCode - @sub.Description</option>
+                                                                            }
+                                                                        </select>
+                                                                    </td>
+                                                                    <td>
+                                                                        <input class="form-control form-control-sm" value="@(taxType?.TaxType ?? "-")" readonly />
+                                                                    </td>
+                                                                    <td class="text-end" style="min-width:110px">
+                                                                        <input class="form-control form-control-sm text-end" value="@(((taxType?.Percent ?? 0m) * 100).ToString(PercentFormat))%" readonly />
+                                                                    </td>
+                                                                    <td class="text-end" style="min-width:140px">
+                                                                        <input class="form-control form-control-sm text-end" value="@TaxValue(_edit, row)" readonly />
+                                                                    </td>
+                                                                    <td class="text-end" style="width:1%">
+                                                                        <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => RemoveTaxRow(_edit, i)" disabled="@_busy">×</button>
+                                                                    </td>
+                                                                </tr>
+                                                            }
+                                                        </tbody>
+                                                        <tfoot>
+                                                            <tr>
+                                                                <td colspan="3" class="text-end"><strong>@L["Products.Col.AdditionalTaxes"]</strong></td>
+                                                                <td class="text-end"><strong>@((AdditionalTaxesPercent(_edit) * 100).ToString("0.######"))%</strong></td>
+                                                                <td class="text-end"><strong>@AdditionalTaxesValue(_edit)</strong></td>
+                                                                <td></td>
+                                                            </tr>
+                                                            <tr>
+                                                                <td colspan="4" class="text-end"><strong>@L["Products.Col.Vat"] (@((VatPercent(_edit) * 100).ToString("0.######"))%)</strong></td>
+                                                                <td class="text-end"><strong>@VatValue(_edit)</strong></td>
+                                                                <td></td>
+                                                            </tr>
+                                                            <tr>
+                                                                <td colspan="4" class="text-end"><strong>@L["Products.Taxes.TotalTaxes"]</strong></td>
+                                                                <td class="text-end"><strong>@TotalTaxesValue(_edit)</strong></td>
+                                                                <td></td>
+                                                            </tr>
+                                                            <tr>
+                                                                <td colspan="4" class="text-end"><strong>@L["Products.Taxes.PriceAfterTaxes"]</strong></td>
+                                                                <td class="text-end"><strong>@PriceAfterTaxes(_edit)</strong></td>
+                                                                <td></td>
+                                                            </tr>
+                                                        </tfoot>
+                                                    </table>
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <div class="text-muted small mt-2">@L["Products.Taxes.EmptyHint"]</div>
+                                            }
+                                        </div>
+                                    </div>
+
+                                    <div class="row g-2 mb-2">
+                                        <div class="col-md-6">
+                                            <label class="form-label">@L["Products.Field.Cost"]</label>
+                                            <InputNumber class="form-control" @bind-Value="_edit.Cost" />
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-check mt-4">
+                                                <InputCheckbox class="form-check-input" @bind-Value="_edit.IsActive" />
+                                                <label class="form-check-label">@L["Common.Active"]</label>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="card mb-3">
+                                        <div class="card-header">
+                                            <h5 class="m-0">@L["Products.Section.Barcodes"]</h5>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="row g-2 align-items-end">
+                                                <div class="col-8">
+                                                    <label class="form-label">@L["Products.PrimaryBarcode"]</label>
+                                                    <InputText class="form-control" @bind-Value="_barcode" />
+                                                </div>
+                                                <div class="col-4 text-end">
+                                                    <button class="btn btn-outline-primary w-100" type="button" @onclick="AddBarcode" disabled="@_busy">@L["Common.Add"]</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="card mb-3">
+                                        <div class="card-header">
+                                            <h5 class="m-0">@L["Products.Section.Units"]</h5>
+                                        </div>
+                                        <div class="card-body">
+                                            @if (_unitsBusy)
+                                            {
+                                                <div class="text-muted">Loading...</div>
+                                            }
+                                            else
+                                            {
+                                                @if (!string.IsNullOrWhiteSpace(_unitError))
+                                                {
+                                                    <div class="alert alert-danger">@_unitError</div>
+                                                }
+
+                                                @if (_units.Count == 0)
+                                                {
+                                                    <div class="text-muted mb-2">No units.</div>
+                                                }
+                                                else
+                                                {
+                                                    <div class="table-responsive mb-2">
+                                                        <table class="table table-sm table-striped align-middle">
+                                                            <thead>
+                                                                <tr>
+                                                                    <th>@L["Common.Name"]</th>
+                                                                    <th class="text-end">@L["Products.Units.Factor"]</th>
+                                                                    <th>@L["Products.Units.Default"]</th>
+                                                                    <th>@L["Common.Active"]</th>
+                                                                    <th></th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                @foreach (var u in _units)
+                                                                {
+                                                                    <tr>
+                                                                        <td>@u.Name</td>
+                                                                        <td class="text-end">@u.Factor</td>
+                                                                        <td>@(u.IsDefault ? L["Common.Yes"] : L["Common.No"])</td>
+                                                                        <td>@(u.IsActive ? L["Common.Yes"] : L["Common.No"])</td>
+                                                                        <td class="text-end">
+                                                                            <button class="btn btn-sm btn-outline-secondary" type="button" @onclick="() => SelectUnitForEdit(u)" disabled="@_busy">@L["Common.Edit"]</button>
+                                                                        </td>
+                                                                    </tr>
+                                                                }
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                }
+
+                                                <div class="fw-bold mb-2">@(_unitEdit is null ? L["Products.Units.AddUnit"] : L["Products.Units.EditUnit"])</div>
+                                                <div class="row g-2">
+                                                    <div class="col-12 col-md-6">
+                                                        <label class="form-label">@L["Common.Name"]</label>
+                                                        <InputText class="form-control" @bind-Value="_unitForm.Name" />
+                                                    </div>
+                                                    <div class="col-12 col-md-6">
+                                                        <label class="form-label">@L["Products.Units.Factor"]</label>
+                                                        <input class="form-control" type="number" step="0.001" @bind-value="_unitForm.Factor" @bind-value:event="oninput" />
+                                                    </div>
+                                                    <div class="col-6">
+                                                        <div class="form-check mt-4">
+                                                            <InputCheckbox class="form-check-input" @bind-Value="_unitForm.IsDefault" />
+                                                            <label class="form-check-label">@L["Products.Units.Default"]</label>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-6">
+                                                        <div class="form-check mt-4">
+                                                            <InputCheckbox class="form-check-input" @bind-Value="_unitForm.IsActive" />
+                                                            <label class="form-check-label">@L["Common.Active"]</label>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div class="d-flex gap-2 mt-2">
+                                                    <button class="btn btn-outline-primary" type="button" @onclick="SaveUnit" disabled="@_busy">@L["Common.Save"]</button>
+                                                    @if (_unitEdit is not null)
+                                                    {
+                                                        <button class="btn btn-outline-secondary" type="button" @onclick="ClearUnitEdit" disabled="@_busy">@L["Common.Cancel"]</button>
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-outline-secondary" @onclick="CloseModal" disabled="@_busy">@L["Common.Cancel"]</button>
+                                    <button type="submit" class="btn btn-primary" disabled="@_busy">@L["Common.Save"]</button>
+                                </div>
+                            </EditForm>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
     }
 </div>
 
 @code {
+    private enum ProductModalMode
+    {
+        None = 0,
+        Create = 1,
+        Edit = 2
+    }
+
     private bool _busy;
     private string? _error;
     private string _search = "";
@@ -393,6 +1028,7 @@
     private Dictionary<Guid, string> _categoryNameById = [];
     private Dictionary<Guid, string> _taxRateNameById = [];
     private Dictionary<Guid, string> _taxTypeNameById = [];
+    private ProductModalMode _modalMode = ProductModalMode.None;
     private CreateProductModel _create = new() { IsActive = true };
     private EditProductModel? _edit;
     private string _barcode = "";
@@ -404,10 +1040,73 @@
     private ProductUnitItem? _unitEdit;
     private UnitFormModel _unitForm = new();
 
+    private bool _productTaxesBusy;
+    private string? _productTaxesError;
+    private bool _bodyModalOpen;
+
     protected override Task OnInitializedAsync() => Task.CompletedTask;
+
+    private void ResetCreateModel()
+    {
+        _create = new CreateProductModel { IsActive = true };
+        _productTaxesBusy = false;
+        _productTaxesError = null;
+
+        if (_create.CategoryId is null && _categories.Count == 1)
+        {
+            _create.CategoryId = _categories[0].Id;
+        }
+
+        if (_create.TaxRateId is null && _taxRates.Count == 1)
+        {
+            _create.TaxRateId = _taxRates[0].Id;
+        }
+
+        if (_create.SalesTaxTypeId is null && _taxTypes.Count == 1)
+        {
+            _create.SalesTaxTypeId = _taxTypes[0].Id;
+        }
+    }
+
+    private void OpenCreateModal()
+    {
+        _error = null;
+        _edit = null;
+        _barcode = "";
+        _units = [];
+        _unitsBusy = false;
+        _unitError = null;
+        _productTaxesBusy = false;
+        _productTaxesError = null;
+        ClearUnitEdit();
+
+        ResetCreateModel();
+        _modalMode = ProductModalMode.Create;
+    }
+
+    private async Task OpenEditModal(ProductItem p)
+    {
+        _error = null;
+        _modalMode = ProductModalMode.Edit;
+        await SelectForEdit(p);
+    }
+
+    private void CloseModal()
+    {
+        _modalMode = ProductModalMode.None;
+        _barcode = "";
+        _units = [];
+        _unitsBusy = false;
+        _unitError = null;
+        _productTaxesBusy = false;
+        _productTaxesError = null;
+        ClearUnitEdit();
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        await EnsureBodyModalStateAsync();
+
         if (!firstRender || _initialLoadDone)
         {
             return;
@@ -423,6 +1122,43 @@
         StateHasChanged();
     }
 
+    private async Task EnsureBodyModalStateAsync()
+    {
+        var open = _modalMode != ProductModalMode.None;
+        if (open == _bodyModalOpen)
+        {
+            return;
+        }
+
+        _bodyModalOpen = open;
+        try
+        {
+            await JS.InvokeVoidAsync("miniErpUi.setBodyModalOpen", open);
+        }
+        catch
+        {
+            // ignore JS interop failures
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (!_bodyModalOpen)
+        {
+            return;
+        }
+
+        _bodyModalOpen = false;
+        try
+        {
+            await JS.InvokeVoidAsync("miniErpUi.setBodyModalOpen", false);
+        }
+        catch
+        {
+            // ignore
+        }
+    }
+
     private async Task LoadLookups()
     {
         _categories = await Api.GetAsync<List<CategoryItem>>("catalog/categories");
@@ -433,19 +1169,9 @@
         _taxRateNameById = _taxRates.ToDictionary(x => x.Id, x => x.Name);
         _taxTypeNameById = _taxTypes.ToDictionary(x => x.Id, x => $"{x.MainCode}/{x.SubCode}");
 
-        if (_create.CategoryId is null && _categories.Count == 1)
+        if (_modalMode == ProductModalMode.None)
         {
-            _create.CategoryId = _categories[0].Id;
-        }
-
-        if (_create.TaxRateId is null && _taxRates.Count == 1)
-        {
-            _create.TaxRateId = _taxRates[0].Id;
-        }
-
-        if (_create.SalesTaxTypeId is null && _taxTypes.Count == 1)
-        {
-            _create.SalesTaxTypeId = _taxTypes[0].Id;
+            ResetCreateModel();
         }
     }
 
@@ -482,6 +1208,8 @@
         _error = null;
         try
         {
+            SyncPrimarySalesTaxType(_create);
+
             if (_create.TaxRateId is null || _create.TaxRateId.Value == Guid.Empty)
             {
                 _error = L["Products.Error.VatRateRequired"].Value;
@@ -514,22 +1242,24 @@
             var created = await response.Content.ReadFromJsonAsync<ProductItem>();
             if (created is not null && !string.IsNullOrWhiteSpace(_create.PrimaryBarcode))
             {
-                await Api.PostAsync($"catalog/products/{created.Id}/barcodes", new { code = _create.PrimaryBarcode.Trim() });
+                var barcodeResponse = await Api.PostAsync($"catalog/products/{created.Id}/barcodes", new { code = _create.PrimaryBarcode.Trim() });
+                if (!barcodeResponse.IsSuccessStatusCode)
+                {
+                    _error = await barcodeResponse.Content.ReadAsStringAsync();
+                }
             }
 
-            _create = new CreateProductModel { IsActive = true };
-            if (_create.CategoryId is null && _categories.Count == 1)
+            if (created is not null && _create.Taxes.Count > 0)
             {
-                _create.CategoryId = _categories[0].Id;
+                await SaveProductTaxes(created.Id, _create.Taxes);
+                if (!string.IsNullOrWhiteSpace(_productTaxesError))
+                {
+                    _error = _productTaxesError;
+                }
             }
-            if (_create.TaxRateId is null && _taxRates.Count == 1)
-            {
-                _create.TaxRateId = _taxRates[0].Id;
-            }
-            if (_create.SalesTaxTypeId is null && _taxTypes.Count == 1)
-            {
-                _create.SalesTaxTypeId = _taxTypes[0].Id;
-            }
+
+            ResetCreateModel();
+            CloseModal();
             await Load();
         }
         finally
@@ -550,6 +1280,7 @@
             Price = p.Price,
             DefaultDiscount = p.DefaultDiscount,
             DefaultUnitName = p.DefaultUnitName,
+            PrimaryBarcode = p.PrimaryBarcode,
             Cost = p.Cost,
             CategoryId = p.CategoryId,
             TaxRateId = p.TaxRateId,
@@ -562,7 +1293,9 @@
             _edit.TaxRateId = _taxRates[0].Id;
         }
         _barcode = "";
-        await LoadUnits(p.Id);
+        _unitError = null;
+        ClearUnitEdit();
+        await Task.WhenAll(LoadUnits(p.Id), LoadProductTaxes(p.Id));
     }
 
     private async Task SaveEdit()
@@ -576,6 +1309,8 @@
         _error = null;
         try
         {
+            SyncPrimarySalesTaxType(_edit);
+
             if (_edit.TaxRateId is null || _edit.TaxRateId.Value == Guid.Empty)
             {
                 _error = L["Products.Error.VatRateRequired"].Value;
@@ -605,8 +1340,15 @@
                 return;
             }
 
+            await SaveProductTaxes(_edit.Id, _edit.Taxes);
+            if (!string.IsNullOrWhiteSpace(_productTaxesError))
+            {
+                _error = _productTaxesError;
+                return;
+            }
+
             await Load();
-            await LoadUnits(_edit.Id);
+            await Task.WhenAll(LoadUnits(_edit.Id), LoadProductTaxes(_edit.Id));
         }
         finally
         {
@@ -629,6 +1371,184 @@
         finally
         {
             _unitsBusy = false;
+        }
+    }
+
+    private IEnumerable<string> GetUniqueMainCodes()
+        => _taxTypes
+            .Where(x => x.IsActive)
+            .Select(x => x.MainCode)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct()
+            .OrderBy(x => x, StringComparer.OrdinalIgnoreCase);
+
+    private IEnumerable<TaxTypeItem> GetSubCodesByMainCode(string? mainCode)
+        => string.IsNullOrWhiteSpace(mainCode)
+            ? Enumerable.Empty<TaxTypeItem>()
+            : _taxTypes
+                .Where(x => x.IsActive)
+                .Where(x => string.Equals(x.MainCode, mainCode, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(x => x.SubCode, StringComparer.OrdinalIgnoreCase);
+
+    private void AddTaxRow(CreateProductModel model)
+    {
+        model.Taxes.Add(new ProductTaxRowModel());
+        SyncPrimarySalesTaxType(model);
+    }
+
+    private void RemoveTaxRow(CreateProductModel model, int index)
+    {
+        if (index < 0 || index >= model.Taxes.Count)
+        {
+            return;
+        }
+
+        model.Taxes.RemoveAt(index);
+        SyncPrimarySalesTaxType(model);
+    }
+
+    private void OnTaxMainCodeChanged(CreateProductModel model, ProductTaxRowModel row, ChangeEventArgs e)
+    {
+        row.MainCode = e.Value?.ToString();
+        row.SubCode = null;
+        row.SalesTaxTypeId = null;
+        SyncPrimarySalesTaxType(model);
+    }
+
+    private void OnTaxSubCodeChanged(CreateProductModel model, ProductTaxRowModel row, ChangeEventArgs e)
+    {
+        row.SubCode = e.Value?.ToString();
+
+        var selected = _taxTypes.FirstOrDefault(x =>
+            string.Equals(x.MainCode, row.MainCode, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(x.SubCode, row.SubCode, StringComparison.OrdinalIgnoreCase));
+
+        row.SalesTaxTypeId = selected?.Id;
+        SyncPrimarySalesTaxType(model);
+    }
+
+    private void SyncPrimarySalesTaxType(CreateProductModel model)
+    {
+        model.SalesTaxTypeId = model.Taxes
+            .Select(x => x.SalesTaxTypeId)
+            .FirstOrDefault(x => x is not null && x.Value != Guid.Empty);
+    }
+
+    private TaxTypeItem? LookupTaxType(ProductTaxRowModel row)
+    {
+        if (row.SalesTaxTypeId is not null && row.SalesTaxTypeId.Value != Guid.Empty)
+        {
+            return _taxTypes.FirstOrDefault(x => x.Id == row.SalesTaxTypeId.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(row.MainCode) && !string.IsNullOrWhiteSpace(row.SubCode))
+        {
+            return _taxTypes.FirstOrDefault(x =>
+                string.Equals(x.MainCode, row.MainCode, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(x.SubCode, row.SubCode, StringComparison.OrdinalIgnoreCase));
+        }
+
+        return null;
+    }
+
+    private const string PercentFormat = "0.######";
+    private static decimal RoundMoney(decimal value) => decimal.Round(value, 3, MidpointRounding.AwayFromZero);
+
+    private decimal PriceAfterDiscount(CreateProductModel model) => RoundMoney(model.Price - model.DefaultDiscount);
+
+    private decimal VatPercent(CreateProductModel model)
+        => model.TaxRateId is null
+            ? 0m
+            : _taxRates.FirstOrDefault(x => x.Id == model.TaxRateId.Value)?.Percent ?? 0m;
+
+    private decimal AdditionalTaxesPercent(CreateProductModel model)
+        => model.Taxes
+            .Select(LookupTaxType)
+            .Where(x => x is not null)
+            .Sum(x => x!.Percent);
+
+    private decimal AdditionalTaxesValue(CreateProductModel model)
+    {
+        var baseAmount = PriceAfterDiscount(model);
+        return RoundMoney(model.Taxes
+            .Select(LookupTaxType)
+            .Where(x => x is not null)
+            .Sum(x => baseAmount * x!.Percent));
+    }
+
+    private decimal TaxValue(CreateProductModel model, ProductTaxRowModel row)
+    {
+        var type = LookupTaxType(row);
+        if (type is null)
+        {
+            return 0m;
+        }
+
+        return RoundMoney(PriceAfterDiscount(model) * type.Percent);
+    }
+
+    private decimal VatValue(CreateProductModel model)
+    {
+        var baseAmount = PriceAfterDiscount(model);
+        return RoundMoney(baseAmount * VatPercent(model));
+    }
+
+    private decimal TotalTaxesValue(CreateProductModel model) => RoundMoney(VatValue(model) + AdditionalTaxesValue(model));
+
+    private decimal PriceAfterTaxes(CreateProductModel model) => RoundMoney(PriceAfterDiscount(model) + TotalTaxesValue(model));
+
+    private async Task LoadProductTaxes(Guid productId)
+    {
+        _productTaxesBusy = true;
+        _productTaxesError = null;
+        try
+        {
+            var items = await Api.GetAsync<List<ProductTaxItem>>($"catalog/products/{productId}/taxes");
+
+            if (_edit is null)
+            {
+                return;
+            }
+
+            _edit.Taxes = items
+                .Select(i =>
+                {
+                    var type = _taxTypes.FirstOrDefault(t => t.Id == i.SalesTaxTypeId);
+                    return new ProductTaxRowModel
+                    {
+                        SalesTaxTypeId = i.SalesTaxTypeId,
+                        MainCode = type?.MainCode,
+                        SubCode = type?.SubCode
+                    };
+                })
+                .ToList();
+
+            SyncPrimarySalesTaxType(_edit);
+        }
+        catch (ApiHttpException ex)
+        {
+            _productTaxesError = string.IsNullOrWhiteSpace(ex.Body) ? ex.Message : ex.Body;
+        }
+        finally
+        {
+            _productTaxesBusy = false;
+        }
+    }
+
+    private async Task SaveProductTaxes(Guid productId, IReadOnlyList<ProductTaxRowModel> taxes)
+    {
+        _productTaxesError = null;
+        var ids = taxes
+            .Select(x => x.SalesTaxTypeId)
+            .Where(x => x is not null && x.Value != Guid.Empty)
+            .Select(x => x!.Value)
+            .Distinct()
+            .ToArray();
+
+        var response = await Api.PutAsync($"catalog/products/{productId}/taxes", new { salesTaxTypeIds = ids });
+        if (!response.IsSuccessStatusCode)
+        {
+            _productTaxesError = await response.Content.ReadAsStringAsync();
         }
     }
 
@@ -765,12 +1685,26 @@
         public Guid? TaxRateId { get; set; }
         public Guid? SalesTaxTypeId { get; set; }
         public decimal ReorderLevel { get; set; }
+        public List<ProductTaxRowModel> Taxes { get; set; } = [];
         public bool IsActive { get; set; }
     }
 
     private sealed class EditProductModel : CreateProductModel
     {
         public Guid Id { get; set; }
+    }
+
+    private sealed class ProductTaxRowModel
+    {
+        public string? MainCode { get; set; }
+        public string? SubCode { get; set; }
+        public Guid? SalesTaxTypeId { get; set; }
+    }
+
+    private sealed class ProductTaxItem
+    {
+        public Guid Id { get; set; }
+        public Guid SalesTaxTypeId { get; set; }
     }
 
     private static string LookupName(IReadOnlyDictionary<Guid, string> map, Guid? id)
@@ -805,6 +1739,7 @@
         public string SubCode { get; set; } = "";
         public string TaxType { get; set; } = "";
         public string Description { get; set; } = "";
+        public decimal Percent { get; set; }
         public bool IsActive { get; set; }
     }
 

@@ -6,6 +6,6 @@ public sealed record TaxTypeListItem(
     string SubCode,
     string TaxType,
     string Description,
+    decimal Percent,
     bool IsActive
 );
-

@@ -37,7 +37,7 @@ public sealed class TaxesController(AppDbContext db) : ControllerBase
             .OrderBy(x => x.MainCode)
             .ThenBy(x => x.SubCode)
             .Take(500)
-            .Select(x => new TaxTypeListItem(x.Id, x.MainCode, x.SubCode, x.TaxType, x.Description, x.IsActive))
+            .Select(x => new TaxTypeListItem(x.Id, x.MainCode, x.SubCode, x.TaxType, x.Description, x.Percent, x.IsActive))
             .ToListAsync(ct);
 
         return Ok(items);
@@ -61,6 +61,11 @@ public sealed class TaxesController(AppDbContext db) : ControllerBase
             return BadRequest(new { error = "INVALID_REQUEST" });
         }
 
+        if (request.Percent < 0 || request.Percent > 1)
+        {
+            return BadRequest(new { error = "INVALID_PERCENT" });
+        }
+
         var entity = new SalesTaxType
         {
             Id = Guid.NewGuid(),
@@ -69,6 +74,7 @@ public sealed class TaxesController(AppDbContext db) : ControllerBase
             SubCode = request.SubCode.Trim(),
             TaxType = request.TaxType.Trim(),
             Description = request.Description.Trim(),
+            Percent = request.Percent,
             IsActive = request.IsActive,
             CreatedAt = DateTimeOffset.UtcNow
         };
@@ -83,7 +89,7 @@ public sealed class TaxesController(AppDbContext db) : ControllerBase
             return Conflict(new { error = "DUPLICATE_CODE" });
         }
 
-        return CreatedAtAction(nameof(GetTaxTypes), new { id = entity.Id }, new TaxTypeListItem(entity.Id, entity.MainCode, entity.SubCode, entity.TaxType, entity.Description, entity.IsActive));
+        return CreatedAtAction(nameof(GetTaxTypes), new { id = entity.Id }, new TaxTypeListItem(entity.Id, entity.MainCode, entity.SubCode, entity.TaxType, entity.Description, entity.Percent, entity.IsActive));
     }
 
     [HttpPut("types/{id:guid}")]
@@ -103,6 +109,11 @@ public sealed class TaxesController(AppDbContext db) : ControllerBase
             return BadRequest(new { error = "INVALID_REQUEST" });
         }
 
+        if (request.Percent < 0 || request.Percent > 1)
+        {
+            return BadRequest(new { error = "INVALID_PERCENT" });
+        }
+
         var entity = await db.SalesTaxTypes.SingleOrDefaultAsync(x => x.Id == id, ct);
         if (entity is null)
         {
@@ -113,6 +124,7 @@ public sealed class TaxesController(AppDbContext db) : ControllerBase
         entity.SubCode = request.SubCode.Trim();
         entity.TaxType = request.TaxType.Trim();
         entity.Description = request.Description.Trim();
+        entity.Percent = request.Percent;
         entity.IsActive = request.IsActive;
 
         try

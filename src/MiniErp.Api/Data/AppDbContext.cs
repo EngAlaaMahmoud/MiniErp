@@ -16,6 +16,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options, ITenant
 
     public DbSet<Product> Products => Set<Product>();
     public DbSet<ProductUnit> ProductUnits => Set<ProductUnit>();
+    public DbSet<ProductTax> ProductTaxes => Set<ProductTax>();
     public DbSet<Barcode> Barcodes => Set<Barcode>();
     public DbSet<Category> Categories => Set<Category>();
     public DbSet<TaxRate> TaxRates => Set<TaxRate>();
@@ -128,6 +129,16 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options, ITenant
             b.HasIndex(x => new { x.TenantId, x.ProductId, x.Name }).IsUnique();
             b.Property(x => x.Name).HasMaxLength(50).IsRequired();
             b.Property(x => x.Factor).HasPrecision(18, 6);
+            b.HasQueryFilter(x => x.TenantId == TenantId);
+        });
+
+        modelBuilder.Entity<ProductTax>(b =>
+        {
+            b.ToTable("ProductTaxes");
+            b.HasKey(x => x.Id);
+            b.HasIndex(x => new { x.TenantId, x.ProductId });
+            b.HasIndex(x => new { x.TenantId, x.ProductId, x.SalesTaxTypeId }).IsUnique();
+            b.Property(x => x.CreatedAt).IsRequired();
             b.HasQueryFilter(x => x.TenantId == TenantId);
         });
 
@@ -393,6 +404,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options, ITenant
             b.Property(x => x.SubCode).HasMaxLength(20).IsRequired();
             b.Property(x => x.TaxType).HasMaxLength(50).IsRequired();
             b.Property(x => x.Description).HasMaxLength(500).IsRequired();
+            b.Property(x => x.Percent).HasPrecision(9, 6);
             b.HasQueryFilter(x => x.TenantId == TenantId);
         });
 
